@@ -296,6 +296,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                     </td>
                     <td className="num" data-label="On hand">
                       {fmtInt(e.unitsOnHand)}
+                      {(e.unitsOnOrder ?? 0) > 0 && (
+                        <div className="product-meta on-order" title="Open purchase orders, not yet received">
+                          +{fmtInt(e.unitsOnOrder)} on order
+                        </div>
+                      )}
                     </td>
                     <td className="num" data-label="Demand / wk">
                       {fmt1(e.avg12)}

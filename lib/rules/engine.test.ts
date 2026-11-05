@@ -291,3 +291,65 @@ describe("exceptions for missing data", () => {
     expect(evaluateSku(s, ctx()).unitsOnHand).toBe(700);
   });
 });
+
+describe("open purchase orders", () => {
+  // Non-festival month so baseline = 100 units/week.
+  const sep = { asOf: "2026-09-15" };
+
+  it("counts units on order in weeks of cover, so a stockout already covered by a PO is not reordered", () => {
+    const s = { ...sku({ ...sep, onHand: 400 }), unitsOnOrder: 300 };
+    const r = evaluateSku(s, ctx());
+    expect(r.unitsOnHand).toBe(400);
+    expect(r.unitsOnOrder).toBe(300);
+    expect(r.stockPosition).toBe(700);
+    expect(r.weeksOfCover).toBe(7);
+    expect(r.flag).toBe("NO_ACTION");
+    expect(r.reason).toContain("incl. 300 on order");
+  });
+
+  it("still reorders when on hand + on order stays below the minimum", () => {
+    const r = evaluateSku({ ...sku({ ...sep, onHand: 400 }), unitsOnOrder: 150 }, ctx());
+    expect(r.weeksOfCover).toBe(5.5);
+    expect(r.flag).toBe("STOCKOUT");
+    expect(r.quantity).toBe(100);
+  });
+
+  it("can tip a SKU into overstock", () => {
+    const r = evaluateSku({ ...sku({ ...sep, onHand: 1000 }), unitsOnOrder: 500 }, ctx());
+    expect(r.flag).toBe("OVERSTOCK");
+  });
+
+  it("treats a missing on-order figure as zero", () => {
+    expect(evaluateSku(sku({ ...sep, onHand: 400 }), ctx()).unitsOnOrder).toBe(0);
+  });
+});
+
+describe("buildEngineInputs: open purchase orders", () => {
+  const base = {
+    skus: [{ skuId: "A", perishability: "Low", standardReorderQty: 100, distributorId: "D1" }],
+    distributors: [{ distributorId: "D1", status: "Active" }],
+    sales: [{ skuId: "A", week: NOW, unitsSold: 10 }],
+    inventory: [{ skuId: "A", location: "WH", unitsOnHand: 50, asOfDate: "2026-10-19" }],
+    calendar: [],
+  };
+
+  it("sums outstanding units of open and partially received POs only", () => {
+    const { skus } = buildEngineInputs({
+      ...base,
+      openPurchaseOrders: [
+        { skuId: "A", orderedQty: 300, receivedQty: 0, status: "Open" },
+        { skuId: "A", orderedQty: 200, receivedQty: 120, status: "Partially Received" },
+        { skuId: "A", orderedQty: 100, receivedQty: 0, status: "issued" },
+        { skuId: "A", orderedQty: 999, receivedQty: 0, status: "Draft" },
+        { skuId: "A", orderedQty: 999, receivedQty: 0, status: "Cancelled" },
+        { skuId: "A", orderedQty: 999, receivedQty: 999, status: "Received" },
+        { skuId: "B", orderedQty: 50, receivedQty: 0, status: "Open" },
+      ],
+    });
+    expect(skus[0].unitsOnOrder).toBe(300 + 80 + 100);
+  });
+
+  it("is zero when there are no POs", () => {
+    expect(buildEngineInputs(base).skus[0].unitsOnOrder).toBe(0);
+  });
+});

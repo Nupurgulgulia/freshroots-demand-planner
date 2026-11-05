@@ -22,7 +22,7 @@ function excluded<T extends PgTable>(table: T, fields: (keyof T["_"]["columns"] 
 
 /**
  * Loads one dataset. Master data, sales and calendar rows are upserted by key;
- * current_inventory is a snapshot, so it replaces the whole table.
+ * current_inventory and open_purchase_orders are snapshots, so they replace the whole table.
  */
 export async function saveDataset<D extends DatasetName>(db: Db, dataset: D, rows: DatasetRow<D>[]) {
   await db.transaction(async (tx) => {
@@ -101,6 +101,18 @@ export async function saveDataset<D extends DatasetName>(db: Db, dataset: D, row
         for (const batch of chunks(values)) await tx.insert(schema.inventory).values(batch);
         break;
       }
+      case "open_purchase_orders": {
+        const lines = (rows as DatasetRow<"open_purchase_orders">[]).map((r) => ({
+          poNumber: r.PO_Number,
+          skuId: r.SKU_ID,
+          orderedQty: r.Ordered_Qty,
+          receivedQty: r.Received_Qty,
+          expectedDate: r.Expected_Date,
+          status: r.Status,
+        }));
+        await replaceOpenPurchaseOrders(tx as unknown as Db, lines, "csv");
+        break;
+      }
       case "calendar": {
         const values = (rows as DatasetRow<"calendar">[]).map((r) => ({
           yearMonth: r.Year_Month,
@@ -121,6 +133,23 @@ export async function saveDataset<D extends DatasetName>(db: Db, dataset: D, row
       }
     }
   });
+}
+
+export interface PurchaseOrderLine {
+  poNumber: string;
+  skuId: string;
+  orderedQty: number;
+  receivedQty: number;
+  expectedDate: string | null;
+  status: string;
+}
+
+/** Open POs are a snapshot: each CSV upload or Zoho sync replaces the whole table. */
+export async function replaceOpenPurchaseOrders(db: Db, lines: PurchaseOrderLine[], source: "csv" | "zoho") {
+  await db.delete(schema.openPurchaseOrders);
+  for (const batch of chunks(lines.map((l) => ({ ...l, source })))) {
+    await db.insert(schema.openPurchaseOrders).values(batch);
+  }
 }
 
 /** Parses and, if the whole file is valid, saves it. Nothing is saved when any row fails. */

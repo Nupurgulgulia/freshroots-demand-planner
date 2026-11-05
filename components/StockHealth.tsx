@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { fmt1 } from "@/lib/format";
+import { fmtCover } from "@/lib/format";
 
 export type HealthRow = {
   skuId: string;
@@ -111,7 +111,7 @@ export function StockHealth({ rows, highDemandPct }: { rows: HealthRow[]; highDe
                 <Momentum change={r.change} highDemandPct={highDemandPct} />
                 <span
                   className="bullet"
-                  title={`${fmt1(r.cover)} weeks of cover · stockout below ${r.stockout}, overstock above ${r.overstock}`}
+                  title={`${fmtCover(r.cover, [r.stockout, r.overstock])} weeks of cover · stockout below ${r.stockout}, overstock above ${r.overstock}`}
                 >
                   <span className="bullet-track">
                     <span className="seg z-low" style={{ width: `${LOW_END}%` }} />
@@ -119,7 +119,7 @@ export function StockHealth({ rows, highDemandPct }: { rows: HealthRow[]; highDe
                     <span className="seg z-high" style={{ width: `${100 - OK_END}%` }} />
                     <span className={`marker m-${z}`} style={{ left: `${r.pos}%` }} />
                   </span>
-                  <span className={`bullet-value v-${z}`}>{fmt1(r.cover)}</span>
+                  <span className={`bullet-value v-${z}`}>{fmtCover(r.cover, [r.stockout, r.overstock])}</span>
                 </span>
               </Link>
             </li>

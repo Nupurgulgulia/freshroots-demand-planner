@@ -1,11 +1,11 @@
-// Loads the five CSVs in /data, inserts default thresholds, and runs the engine.
+// Loads the five CSVs in /data (plus open_purchase_orders.csv if present), inserts default thresholds, and runs the engine.
 // Usage: npm run db:seed   (uses DATABASE_URL if set, otherwise local PGlite)
 
 import { config } from "dotenv";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { closeDb, getDb } from "@/lib/db";
-import { DATASET_NAMES } from "@/lib/data/csv";
+import { DATASET_NAMES, OPTIONAL_DATASETS } from "@/lib/data/csv";
 import { importCsv } from "@/lib/data/load";
 import { runEngine } from "@/lib/run-engine";
 import { getThresholds } from "@/lib/settings";
@@ -19,6 +19,7 @@ async function main() {
   // Masters first so later files reference known IDs.
   for (const dataset of DATASET_NAMES.slice().sort((a, b) => order(a) - order(b))) {
     const file = path.join(process.cwd(), "data", `${dataset}.csv`);
+    if (OPTIONAL_DATASETS.includes(dataset) && !existsSync(file)) continue;
     const result = await importCsv(db, dataset, readFileSync(file, "utf8"), `${dataset}.csv`, "seed");
     if (!result.ok) {
       console.error(`${dataset}: rejected\n  ${result.errors.join("\n  ")}`);
@@ -34,7 +35,7 @@ async function main() {
 }
 
 function order(d: string) {
-  return ["distributor_master", "sku_master", "calendar", "weekly_sales", "current_inventory"].indexOf(d);
+  return ["distributor_master", "sku_master", "calendar", "weekly_sales", "current_inventory", "open_purchase_orders"].indexOf(d);
 }
 
 main().catch((err) => {

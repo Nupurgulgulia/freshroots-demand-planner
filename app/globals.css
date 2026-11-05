@@ -1966,3 +1966,8 @@ a:focus-visible {
     min-height: calc(100vh - 80px);
   }
 }
+
+.product-meta.on-order {
+  color: var(--high-fg);
+  font-weight: 500;
+}

@@ -1,4 +1,4 @@
-// Parses and validates the five input CSVs. Pure: no database access.
+// Parses and validates the input CSVs (five required, plus optional open POs). Pure: no database access.
 
 import Papa from "papaparse";
 import { z } from "zod";
@@ -47,10 +47,30 @@ export const datasetSchemas = {
     Year_Month: z.string().trim().regex(/^\d{4}-\d{2}$/, "expected YYYY-MM"),
     Is_Festival_Month: bool,
   }),
+  // Optional: purchase orders placed but not fully received (a CSV export, or synced from Zoho Inventory).
+  open_purchase_orders: z
+    .object({
+      PO_Number: text,
+      SKU_ID: text,
+      Ordered_Qty: intNonNeg,
+      Received_Qty: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? 0 : v), intNonNeg),
+      Expected_Date: z.union([isoDate, z.string().trim().length(0)]).transform((v) => v || null),
+      Status: text,
+    })
+    .refine((r) => r.Received_Qty <= r.Ordered_Qty, {
+      message: "Received_Qty is more than Ordered_Qty",
+      path: ["Received_Qty"],
+    }),
 } as const;
 
 export type DatasetName = keyof typeof datasetSchemas;
 export const DATASET_NAMES = Object.keys(datasetSchemas) as DatasetName[];
+/** Datasets the seed script loads only when the file exists. */
+export const OPTIONAL_DATASETS: DatasetName[] = ["open_purchase_orders"];
+
+export function datasetColumns(dataset: DatasetName): string[] {
+  return Object.keys(datasetSchemas[dataset].shape);
+}
 export type DatasetRow<D extends DatasetName> = z.infer<(typeof datasetSchemas)[D]>;
 
 /** Columns that must be unique together within one file. */
@@ -60,6 +80,7 @@ const keyColumns: Record<DatasetName, string[]> = {
   distributor_master: ["Distributor_ID"],
   current_inventory: ["SKU_ID", "Location"],
   calendar: ["Year_Month"],
+  open_purchase_orders: ["PO_Number", "SKU_ID"],
 };
 
 export interface ParseResult<D extends DatasetName> {
@@ -76,7 +97,7 @@ export function parseDataset<D extends DatasetName>(dataset: D, csv: string): Pa
   });
   const errors: string[] = parsed.errors.map((e) => `Row ${(e.row ?? 0) + 2}: ${e.message}`);
 
-  const expected = Object.keys(schema.shape);
+  const expected = datasetColumns(dataset);
   const missing = expected.filter((c) => !parsed.meta.fields?.includes(c));
   if (missing.length) {
     return { rows: [], errors: [`Missing column(s): ${missing.join(", ")}`] };

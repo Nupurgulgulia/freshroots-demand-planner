@@ -8,6 +8,7 @@ import {
   regenerateAction,
   reviewAction,
   saveThresholdsAction,
+  syncZohoAction,
   uploadAction,
   type ActionState,
 } from "@/app/actions";
@@ -337,6 +338,30 @@ export function AddFestivalMonthForm() {
       <button type="submit" disabled={pending}>
         Save month
       </button>
+      <Status state={state} />
+    </form>
+  );
+}
+
+export function ZohoSyncForm({ configured }: { configured: boolean }) {
+  const [state, action, pending] = useActionState(syncZohoAction, {});
+  return (
+    <form action={action} className="stack">
+      <div className="row">
+        <NameInput />
+        <label className="check">
+          <input type="checkbox" name="rerun" value="1" defaultChecked /> Recalculate after syncing
+        </label>
+        <button
+          type="submit"
+          disabled={pending || !configured}
+          title={configured ? undefined : "Set the ZOHO_* settings to enable"}
+          style={{ marginLeft: "auto" }}
+        >
+          <RefreshIcon size={16} />
+          {pending ? "Syncing…" : "Sync from Zoho"}
+        </button>
+      </div>
       <Status state={state} />
     </form>
   );

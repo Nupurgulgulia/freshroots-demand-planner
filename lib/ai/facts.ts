@@ -34,6 +34,8 @@ export function buildFacts(
     rules_fired: e.rulesFired.map((r) => RULE_LABELS[r]),
     exception_reasons: e.exceptionReasons,
     units_on_hand: e.unitsOnHand,
+    units_on_open_purchase_orders: e.unitsOnOrder ?? 0,
+    stock_position_units: e.stockPosition ?? e.unitsOnHand,
     avg_weekly_units_last_12_weeks: r1(e.avg12),
     avg_weekly_units_last_4_weeks: r1(e.avg4),
     change_4w_vs_12w_pct: e.demandRatio == null ? null : r1((e.demandRatio - 1) * 100),

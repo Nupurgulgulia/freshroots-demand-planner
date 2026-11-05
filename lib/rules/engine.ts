@@ -83,6 +83,8 @@ export interface SkuInput {
   distributorStatus: string | null;
   sales: { week: string; unitsSold: number }[];
   inventory: { location: string; unitsOnHand: number; asOfDate: string }[];
+  /** Units on open purchase orders not yet received (ordered minus received). */
+  unitsOnOrder?: number;
 }
 
 export interface EngineContext {
@@ -97,6 +99,10 @@ export interface Evaluation {
   skuId: string;
   perishability: "Low" | "High" | null;
   unitsOnHand: number | null;
+  /** Units ordered but not yet received. Missing on runs saved before open POs were added. */
+  unitsOnOrder?: number;
+  /** On hand + on order: the stock that weeks of cover is based on. */
+  stockPosition?: number | null;
   asOfDate: string | null;
   avg12: number | null;
   avg4: number | null;
@@ -187,10 +193,12 @@ export function evaluateSku(sku: SkuInput, ctx: EngineContext): Evaluation {
   const demandBaseline =
     avg12 == null ? null : festivalMonth ? avg12 * (1 + t.festivalUpliftPct) : avg12;
 
-  // Rule 2: weeks of cover.
+  // Rule 2: weeks of cover, counting stock already on order so open POs are not ordered twice.
+  const unitsOnOrder = Math.max(0, sku.unitsOnOrder ?? 0);
+  const stockPosition = unitsOnHand == null ? null : unitsOnHand + unitsOnOrder;
   let weeksOfCover: number | null = null;
-  if (unitsOnHand != null && demandBaseline != null) {
-    if (demandBaseline > 0) weeksOfCover = unitsOnHand / demandBaseline;
+  if (stockPosition != null && demandBaseline != null) {
+    if (demandBaseline > 0) weeksOfCover = stockPosition / demandBaseline;
     else dataProblems.push("No sales in the last 12 weeks, so weeks of cover cannot be calculated.");
   }
   const demandRatio = avg12 && avg4 != null ? avg4 / avg12 : null;
@@ -259,6 +267,8 @@ export function evaluateSku(sku: SkuInput, ctx: EngineContext): Evaluation {
     skuId: sku.skuId,
     perishability,
     unitsOnHand,
+    unitsOnOrder,
+    stockPosition,
     asOfDate,
     avg12,
     avg4,
@@ -288,7 +298,8 @@ const fmt = (x: number) => (Math.round(x * 10) / 10).toString();
 /** Template one-line reason, used until (or instead of) a Gemini explanation. */
 function describe(e: Omit<Evaluation, "reason">, t: Thresholds): string {
   if (e.action === "REVIEW") return `Needs review: ${e.exceptionReasons[0]}`;
-  const cover = `${fmt(e.weeksOfCover!)} weeks of cover`;
+  const onOrder = e.unitsOnOrder ? ` (incl. ${e.unitsOnOrder} on order)` : "";
+  const cover = `${fmt(e.weeksOfCover!)} weeks of cover${onOrder}`;
   const trend = `last-4-week demand ${fmt(e.avg4!)}/wk vs 12-week ${fmt(e.avg12!)}/wk`;
   let text: string;
   if (e.stockoutRisk && e.highDemand) {

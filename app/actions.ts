@@ -1,16 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getDb } from "@/lib/db";
+import { getDb, schema } from "@/lib/db";
 import { explainRecommendation, explainRun } from "@/lib/ai/explain";
 import { geminiConfigured } from "@/lib/ai/gemini";
 import { DATASET_NAMES, datasetFromFileName, type DatasetName } from "@/lib/data/csv";
-import { importCsv } from "@/lib/data/load";
+import { importCsv, replaceOpenPurchaseOrders } from "@/lib/data/load";
 import { reviewRecommendation, type Decision } from "@/lib/review";
 import { getLatestRun, runEngine } from "@/lib/run-engine";
 import type { Thresholds } from "@/lib/rules/engine";
 import { THRESHOLD_DEFS, fromDisplay } from "@/lib/settings";
 import { setFestivalMonth, updateThresholds } from "@/lib/settings-update";
+import { fetchOpenPurchaseOrders, zohoConfig } from "@/lib/zoho/inventory";
+import { toPurchaseOrderLines } from "@/lib/zoho/purchase-orders";
 
 export interface ActionState {
   ok?: boolean;
@@ -131,4 +133,40 @@ export async function uploadAction(_prev: ActionState, fd: FormData): Promise<Ac
   }
   revalidateAll();
   return { ok: errors.length === 0, message: messages.join("\n"), errors };
+}
+
+/** Replaces the open-PO snapshot with Zoho Inventory's open purchase orders, then optionally recalculates. */
+export async function syncZohoAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const name = str(fd, "name");
+  if (!name) return { ok: false, errors: ["Enter your name."] };
+  const config = zohoConfig();
+  if (!config) return { ok: false, errors: ["Zoho isn't connected yet. Set the ZOHO_* settings first (see the README)."] };
+
+  const db = await getDb();
+  try {
+    const pos = await fetchOpenPurchaseOrders(config);
+    const { lines, skippedNoSku } = toPurchaseOrderLines(pos);
+    await db.transaction((tx) => replaceOpenPurchaseOrders(tx as unknown as typeof db, lines, "zoho"));
+    await db.insert(schema.uploads).values({
+      dataset: "open_purchase_orders",
+      fileName: "Zoho Inventory sync",
+      rowCount: lines.length,
+      uploadedBy: name,
+    });
+
+    const known = new Set((await db.select({ id: schema.skus.skuId }).from(schema.skus)).map((r) => r.id));
+    const unknown = [...new Set(lines.map((l) => l.skuId).filter((id) => !known.has(id)))];
+    const messages = [`Synced ${pos.length} open purchase orders (${lines.length} lines) from Zoho Inventory.`];
+    if (unknown.length) messages.push(`Not in the SKU master, so ignored: ${unknown.join(", ")}.`);
+    if (skippedNoSku) messages.push(`${skippedNoSku} line(s) had no SKU code in Zoho and were skipped.`);
+
+    if (fd.get("rerun") === "1") {
+      const run = await runEngine(db, name);
+      messages.push(`Engine run #${run.id} created for week ${run.nowWeek}.`);
+    }
+    revalidateAll();
+    return { ok: true, message: messages.join("\n") };
+  } catch (err) {
+    return { ok: false, message: (err as Error).message };
+  }
 }

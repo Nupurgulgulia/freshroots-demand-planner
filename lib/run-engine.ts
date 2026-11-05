@@ -8,17 +8,18 @@ import { buildEngineInputs } from "@/lib/rules/inputs";
 import { getThresholds } from "@/lib/settings";
 
 export async function runEngine(db: Db, triggeredBy: string) {
-  const [skus, distributors, sales, inventory, calendar, thresholds] = await Promise.all([
+  const [skus, distributors, sales, inventory, calendar, openPurchaseOrders, thresholds] = await Promise.all([
     db.select().from(schema.skus).orderBy(schema.skus.skuId),
     db.select().from(schema.distributors),
     db.select().from(schema.weeklySales),
     db.select().from(schema.inventory),
     db.select().from(schema.festivalCalendar),
+    db.select().from(schema.openPurchaseOrders),
     getThresholds(db),
   ]);
   if (skus.length === 0) throw new Error("No SKUs loaded. Upload sku_master.csv first.");
 
-  const inputs = buildEngineInputs({ skus, distributors, sales, inventory, calendar });
+  const inputs = buildEngineInputs({ skus, distributors, sales, inventory, calendar, openPurchaseOrders });
   if (!inputs.nowWeek) throw new Error("No sales loaded. Upload weekly_sales.csv first.");
 
   const results = evaluateAll(inputs.skus, {

@@ -7,10 +7,11 @@ import { ArrowLeftIcon, CheckIcon, SparkIcon, XIcon } from "@/components/icons";
 import { SalesChart } from "@/components/SalesChart";
 import { geminiConfigured } from "@/lib/ai/gemini";
 import { getDb, schema } from "@/lib/db";
-import { fmt1, fmtDateTime, fmtInt, fmtPct } from "@/lib/format";
+import { fmt1, fmtCover, fmtDateTime, fmtInt, fmtPct } from "@/lib/format";
 import { getAuditForSku } from "@/lib/review";
 import { getLatestRun } from "@/lib/run-engine";
 import { RULE_LABELS, type Evaluation, type RuleId, type Thresholds } from "@/lib/rules/engine";
+import { isOpenPoStatus } from "@/lib/rules/inputs";
 import { weeksEndingAt } from "@/lib/rules/weeks";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +47,11 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
   const chartData = chartWeeks.map((week) => ({ week, units: byWeek.get(week) ?? null, inLast12: last12.has(week) }));
 
   const audit = await getAuditForSku(db, skuId);
+  // Current open-PO snapshot for this SKU (the run itself stores only the total it used).
+  const poLines = (
+    await db.select().from(schema.openPurchaseOrders).where(eq(schema.openPurchaseOrders.skuId, skuId))
+  ).filter((p) => isOpenPoStatus(p.status));
+  const onOrder = e.unitsOnOrder ?? 0;
   const otherRuns = await db
     .select({ runId: schema.recommendations.runId, flag: schema.recommendations.flag, action: schema.recommendations.action, quantity: schema.recommendations.quantity })
     .from(schema.recommendations)
@@ -125,6 +131,13 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
           <div className="stat-note">{e.asOfDate ? `as of ${e.asOfDate}` : "no stock date"}</div>
         </div>
         <div className="stat">
+          <div className="stat-label">On order</div>
+          <div className="stat-value">{fmtInt(onOrder)}</div>
+          <div className="stat-note">
+            {onOrder > 0 ? `counted in cover · ${fmtInt(e.stockPosition)} total` : "no open purchase orders"}
+          </div>
+        </div>
+        <div className="stat">
           <div className="stat-label">12-week average</div>
           <div className="stat-value">{fmt1(e.avg12)}</div>
           <div className="stat-note">units / week</div>
@@ -143,12 +156,53 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
         </div>
         <div className="stat">
           <div className="stat-label">Weeks of cover</div>
-          <div className="stat-value">{fmt1(e.weeksOfCover)}</div>
+          <div className="stat-value">{fmtCover(e.weeksOfCover, [e.stockoutThresholdWeeks, e.overstockThresholdWeeks])}</div>
           <div className="stat-note" style={{ marginTop: 4 }}>
             <CoverBar weeks={e.weeksOfCover} stockout={e.stockoutThresholdWeeks} overstock={e.overstockThresholdWeeks} barOnly />
           </div>
         </div>
       </div>
+
+      {poLines.length > 0 && (
+        <div className="card">
+          <div className="card-head">
+            <h2>Open purchase orders</h2>
+            <span className="muted small">
+              Loaded {fmtDateTime(poLines[0].loadedAt)} from {poLines[0].source === "zoho" ? "Zoho Inventory" : "CSV"}
+            </span>
+          </div>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>PO</th>
+                  <th>Status</th>
+                  <th>Expected</th>
+                  <th className="num">Ordered</th>
+                  <th className="num">Received</th>
+                  <th className="num">Still to come</th>
+                </tr>
+              </thead>
+              <tbody>
+                {poLines.map((p) => (
+                  <tr key={p.poNumber}>
+                    <td style={{ fontWeight: 500 }}>{p.poNumber}</td>
+                    <td>
+                      <span className="badge no-dot tone-neutral">{p.status}</span>
+                    </td>
+                    <td className="muted">{p.expectedDate ?? "—"}</td>
+                    <td className="num">{fmtInt(p.orderedQty)}</td>
+                    <td className="num">{fmtInt(p.receivedQty)}</td>
+                    <td className="num">
+                      <strong>{fmtInt(Math.max(0, p.orderedQty - p.receivedQty))}</strong>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="card-head">

@@ -1,5 +1,5 @@
 import { ACTION_LABELS, FLAG_LABELS, type Action, type Flag } from "@/lib/rules/engine";
-import { fmt1 } from "@/lib/format";
+import { fmtCover } from "@/lib/format";
 
 export function FlagBadge({ flag }: { flag: string }) {
   return <span className={`badge flag-${flag}`}>{FLAG_LABELS[flag as Flag] ?? flag}</span>;
@@ -51,11 +51,11 @@ export function CoverBar({
   const pct = Math.max(4, Math.min(100, (weeks / max) * 100));
   const color = weeks < stockout ? "var(--cover-low)" : weeks > overstock ? "var(--cover-high)" : "var(--cover-ok)";
   return (
-    <span className={barOnly ? "cover bar-only" : "cover"} title={`Stockout below ${stockout} weeks, overstock above ${overstock} weeks`}>
+    <span className={barOnly ? "cover bar-only" : "cover"} title={`${fmtCover(weeks, [stockout, overstock])} weeks of cover · stockout below ${stockout} weeks, overstock above ${overstock} weeks`}>
       <span className="cover-bar">
         <span className="cover-fill" style={{ width: `${pct}%`, background: color }} />
       </span>
-      <span className="cover-value">{fmt1(weeks)}</span>
+      <span className="cover-value">{fmtCover(weeks, [stockout, overstock])}</span>
     </span>
   );
 }

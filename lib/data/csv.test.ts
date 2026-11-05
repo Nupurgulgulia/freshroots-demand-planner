@@ -45,3 +45,20 @@ describe("parseDataset", () => {
     expect(datasetFromFileName("other.csv")).toBeNull();
   });
 });
+
+describe("open_purchase_orders.csv", () => {
+  const header = "PO_Number,SKU_ID,Ordered_Qty,Received_Qty,Expected_Date,Status";
+
+  it("accepts blank received quantity and expected date", () => {
+    const { rows, errors } = parseDataset("open_purchase_orders", `${header}\nPO-1,SKU001,300,,,Open\nPO-1,SKU003,200,50,2026-11-20,Partially Received`);
+    expect(errors).toEqual([]);
+    expect(rows[0]).toMatchObject({ Received_Qty: 0, Expected_Date: null });
+    expect(rows[1]).toMatchObject({ Received_Qty: 50, Expected_Date: "2026-11-20" });
+  });
+
+  it("rejects receiving more than was ordered, and duplicate PO lines", () => {
+    const { errors } = parseDataset("open_purchase_orders", `${header}\nPO-1,SKU001,100,150,,Open\nPO-2,SKU001,10,0,,Open\nPO-2,SKU001,20,0,,Open`);
+    expect(errors.join("\n")).toMatch(/more than Ordered_Qty/);
+    expect(errors.join("\n")).toMatch(/duplicate PO_Number \+ SKU_ID/);
+  });
+});

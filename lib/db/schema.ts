@@ -51,6 +51,22 @@ export const inventory = pgTable(
   (t) => [primaryKey({ columns: [t.skuId, t.location] })],
 );
 
+/** Purchase orders not yet fully received, one row per PO line. Replaced on every CSV upload or Zoho sync. */
+export const openPurchaseOrders = pgTable(
+  "open_purchase_orders",
+  {
+    poNumber: text("po_number").notNull(),
+    skuId: text("sku_id").notNull(),
+    orderedQty: integer("ordered_qty").notNull(),
+    receivedQty: integer("received_qty").notNull().default(0),
+    expectedDate: text("expected_date"), // YYYY-MM-DD
+    status: text("status").notNull(),
+    source: text("source").notNull(), // "csv" | "zoho"
+    loadedAt: timestamp("loaded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.poNumber, t.skuId] })],
+);
+
 export const festivalCalendar = pgTable("festival_calendar", {
   yearMonth: text("year_month").primaryKey(), // YYYY-MM
   year: integer("year").notNull(),

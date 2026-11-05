@@ -30,7 +30,8 @@ Stack: Next.js 16 (App Router, TypeScript), Neon Postgres via Drizzle ORM, Googl
 
 1. **Festival uplift:** if the month of `As_Of_Date` is a festival month, baseline = avg12 × 1.25; otherwise
    baseline = avg12.
-2. **Weeks of cover** = units on hand ÷ baseline.
+2. **Weeks of cover** = (units on hand + units on open purchase orders) ÷ baseline. "On order" is ordered minus
+   received, for POs with status Open, Issued or Partially Received; with no PO data it is 0.
 3. **Stockout risk:** cover < 6 weeks (< 3 for High perishability). Reorder `Standard_Reorder_Qty`.
 4. **Overstock risk:** cover > 14 weeks (> 4 for High perishability). Pause the next order.
 5. **High demand:** avg4 > 1.2 × avg12. Reorder 1.5 × `Standard_Reorder_Qty`.
@@ -92,6 +93,8 @@ reason is shown instead.
 | `GEMINI_MODEL` | No | Model name. Defaults to `gemini-3.8-flash` (`gemini-2.5-flash` is no longer offered to new API users). Check the current model list in Google's docs and set this explicitly. |
 | `APP_PASSWORD` | On Vercel, yes | Shared password for the whole site. Every page, form submission and the CSV export require it. Changing it signs everyone out. If it is empty, the site is open, which is fine for local use only. |
 | `PGLITE_DIR` | No | Where the local PGlite data lives (default `./.pglite`). |
+| `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`, `ZOHO_ORG_ID` | No | Zoho Inventory API access for the **Sync from Zoho** button (see below). |
+| `ZOHO_DC` | No | Zoho data centre domain: `in` (default), `com`, `eu`, `com.au`, … |
 
 Next.js loads `.env.local` at startup. The startup log shows `- Environments: .env.local` when it does. Restart
 `npm run dev` after editing the file. Keys belong in `.env.local` locally and in Vercel project settings in production. `.env*` files are git-ignored;
@@ -123,6 +126,30 @@ Until real sign-in exists, the whole site sits behind one shared password (`APP_
 submissions and the CSV export. The cookie is an HMAC of the password, lasts 30 days, and is httpOnly. **Sign out**
 clears it. The reviewer name is still typed by hand, so the audit log records who people *say* they are. Replace
 this with Auth.js (Google or email link) before go-live.
+
+## Open purchase orders (Zoho Inventory)
+
+Stock that is already ordered counts towards weeks of cover, so the app doesn't recommend ordering it again.
+Open POs are a snapshot that is replaced each time it's loaded, in one of two ways (both on the Upload page):
+
+- **CSV:** upload `open_purchase_orders.csv` with columns
+  `PO_Number, SKU_ID, Ordered_Qty, Received_Qty, Expected_Date, Status` (one row per PO line;
+  `Received_Qty` and `Expected_Date` may be blank). Only Open, Issued and Partially Received lines count.
+  An example is in `data/samples/`. The seed script loads `data/open_purchase_orders.csv` only if it exists.
+- **Zoho Inventory:** press **Sync from Zoho**. It lists the organisation's purchase orders, keeps the open and
+  partially received ones, reads each line's `sku`, `quantity`, `quantity_received` and `quantity_cancelled`, and
+  matches the Zoho item SKU to our `SKU_ID`. Lines whose SKU isn't in the SKU master are reported and ignored.
+
+To connect Zoho (one-time):
+
+1. In the Zoho API console for your data centre (for India, https://api-console.zoho.in), add a **Self Client**.
+2. Generate a grant code with scope `ZohoInventory.purchaseorders.READ`, and exchange it for a **refresh token**
+   (`POST https://accounts.zoho.in/oauth/v2/token` with `grant_type=authorization_code`).
+3. Set `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`, `ZOHO_ORG_ID` (Zoho Inventory → Settings →
+   Organization profile) and `ZOHO_DC` in `.env.local` and in Vercel, then redeploy.
+
+The Zoho field mapping (`lib/zoho/purchase-orders.ts`) follows Zoho Inventory's API v1 but has not yet been run
+against a live Zoho organisation; check the first sync's numbers against Zoho.
 
 ## How Gemini is kept away from the numbers
 
@@ -171,11 +198,13 @@ These are my readings of the brief. Each is easy to change.
 9. **Reviews.** Approve keeps the engine quantity. Edit needs a whole-number quantity and a note. Reject needs a
    note. A decision can be changed later, and each change is a new audit row. Approving a "pause" records agreement
    but creates no order line. The reviewer's name is typed (no login) and remembered in the browser.
-10. **Uploads.** Master data, sales and calendar rows are upserted by key. `current_inventory` replaces the whole
-    stock snapshot. A file with any invalid row is rejected entirely.
+10. **Uploads.** Master data, sales and calendar rows are upserted by key. `current_inventory` and
+    `open_purchase_orders` replace the whole snapshot. A file with any invalid row is rejected entirely.
 11. **AI explanations** are generated on demand (button), not on every run, to save time and API cost. "No action"
     SKUs are not sent to Gemini.
-12. **Open questions from the build plan** that this version does not cover yet: open POs in Zoho, per-distributor
+12. **Open POs count in full.** Every unit ordered and not yet received counts towards cover, whatever its
+    expected date; a late PO can therefore hide a stockout. The expected date is shown on the SKU page.
+13. **Open questions from the build plan** that this version does not cover yet: sending approved POs to Zoho, per-distributor
     forecasts, login (Auth.js), email/WhatsApp alerts, scheduled SAP imports, and the Vercel Cron run.
 
 ## Project layout
