@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { FlagBadge, StatusBadge, actionText } from "@/components/badges";
+import { CoverBar, FlagBadge, StatusBadge, actionText } from "@/components/badges";
 import { RegenerateForm, ReviewForm } from "@/components/forms";
+import { ArrowLeftIcon, CheckIcon, SparkIcon, XIcon } from "@/components/icons";
 import { SalesChart } from "@/components/SalesChart";
 import { geminiConfigured } from "@/lib/ai/gemini";
 import { getDb, schema } from "@/lib/db";
@@ -84,54 +85,124 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
 
   return (
     <>
-      <p>
-        <Link href="/">← Dashboard</Link>
-      </p>
-      <div className="page-head">
-        <div>
-          <h1>
-            {skuId} · {sku?.name ?? "Unknown SKU"}
-          </h1>
-          <div className="muted">
-            {sku?.category} · {e.perishability ?? "?"} perishability · standard reorder {fmtInt(sku?.standardReorderQty)}{" "}
-            {sku?.unitOfMeasure} · {dist ? `${dist.name} (${dist.region}, ${dist.status})` : "distributor unknown"}
+      <Link href="/" className="back-link">
+        <ArrowLeftIcon size={16} /> Dashboard
+      </Link>
+
+      <div className="card">
+        <div className="hero">
+          <div>
+            <div className="eyebrow">{skuId}</div>
+            <h1>{sku?.name ?? "Unknown SKU"}</h1>
+            <div className="meta">
+              {sku?.category && <span className="tag">{sku.category}</span>}
+              <span className={`tag ${e.perishability === "High" ? "perishable" : ""}`}>
+                {e.perishability ?? "?"} perishability
+              </span>
+              <span className="tag">
+                Standard reorder {fmtInt(sku?.standardReorderQty)} {sku?.unitOfMeasure}
+              </span>
+              <span className="tag">
+                {dist ? `${dist.name} · ${dist.region} · ${dist.status}` : "Distributor unknown"}
+              </span>
+            </div>
+          </div>
+          <div className="decision-panel">
+            <div className="row" style={{ justifyContent: "flex-end" }}>
+              <FlagBadge flag={rec.flag} />
+              <StatusBadge status={rec.status} />
+            </div>
+            <div className="big">{actionText(rec.action, rec.quantity)}</div>
+            <div className="muted small">Engine recommendation for week {run.nowWeek}</div>
           </div>
         </div>
-        <div className="row">
-          <FlagBadge flag={rec.flag} />
-          <strong>{actionText(rec.action, rec.quantity)}</strong>
-          <StatusBadge status={rec.status} />
+      </div>
+
+      <div className="stat-tiles">
+        <div className="stat">
+          <div className="stat-label">Units on hand</div>
+          <div className="stat-value">{fmtInt(e.unitsOnHand)}</div>
+          <div className="stat-note">{e.asOfDate ? `as of ${e.asOfDate}` : "no stock date"}</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">12-week average</div>
+          <div className="stat-value">{fmt1(e.avg12)}</div>
+          <div className="stat-note">units / week</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">4-week average</div>
+          <div className="stat-value">{fmt1(e.avg4)}</div>
+          <div className="stat-note">{fmtPct(e.demandRatio == null ? null : e.demandRatio - 1)} vs 12-week</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">Demand baseline</div>
+          <div className="stat-value">{fmt1(e.demandBaseline)}</div>
+          <div className="stat-note">
+            {e.festivalMonth ? `festival month, +${Math.round(t.festivalUpliftPct * 100)}%` : "not a festival month"}
+          </div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">Weeks of cover</div>
+          <div className="stat-value">{fmt1(e.weeksOfCover)}</div>
+          <div className="stat-note" style={{ marginTop: 4 }}>
+            <CoverBar weeks={e.weeksOfCover} stockout={e.stockoutThresholdWeeks} overstock={e.overstockThresholdWeeks} barOnly />
+          </div>
         </div>
       </div>
 
       <div className="card">
-        <h2>Sales, last {CHART_WEEKS} weeks</h2>
+        <div className="card-head">
+          <h2>Sales, last {CHART_WEEKS} weeks</h2>
+          <span className="muted small">Darker bars are the 12-week window used by the rules</span>
+        </div>
         <SalesChart data={chartData} avg12={e.avg12} baseline={e.festivalMonth ? e.demandBaseline : null} />
       </div>
 
       <div className="grid-2">
         <div className="card">
+          <h2>How the engine decided</h2>
+          <ul className="rules">
+            {checks.map((c) => (
+              <li key={c.rule}>
+                <span className={`mark ${c.fired ? "on" : "off"}`}>
+                  {c.fired ? <CheckIcon size={13} /> : <XIcon size={12} />}
+                </span>
+                <span>
+                  <span className="rule-name">{RULE_LABELS[c.rule]}</span>
+                  <span className="muted small">{c.fired ? " · applies" : " · does not apply"}</span>
+                  <div className="rule-text">{c.text}</div>
+                </span>
+              </li>
+            ))}
+            {otherFired.map((r) => (
+              <li key={r}>
+                <span className="mark on">
+                  <CheckIcon size={13} />
+                </span>
+                <span className="rule-name">{RULE_LABELS[r]}</span>
+              </li>
+            ))}
+          </ul>
+          {e.exceptionReasons.length > 0 && (
+            <div className="callout" style={{ marginTop: 14 }}>
+              <strong>Why this is an exception</strong>
+              <ul>
+                {e.exceptionReasons.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p className="muted" style={{ marginBottom: 0 }}>
+            <strong style={{ color: "var(--text)" }}>Engine reason:</strong> {rec.reason}
+          </p>
+        </div>
+
+        <div className="card">
           <h2>Numbers behind the decision</h2>
           <dl className="kv">
             <dt>Now (latest sales week)</dt>
             <dd>{run.nowWeek}</dd>
-            <dt>Units on hand</dt>
-            <dd>
-              {fmtInt(e.unitsOnHand)} {e.asOfDate && <span className="muted">as of {e.asOfDate}</span>}
-            </dd>
-            <dt>12-week average</dt>
-            <dd>{fmt1(e.avg12)} units/week</dd>
-            <dt>4-week average</dt>
-            <dd>
-              {fmt1(e.avg4)} units/week{" "}
-              <span className="muted">({fmtPct(e.demandRatio == null ? null : e.demandRatio - 1)} vs 12-week)</span>
-            </dd>
-            <dt>Festival month</dt>
-            <dd>{e.festivalMonth ? `Yes (+${Math.round(t.festivalUpliftPct * 100)}%)` : "No"}</dd>
-            <dt>Demand baseline</dt>
-            <dd>{fmt1(e.demandBaseline)} units/week</dd>
-            <dt>Weeks of cover</dt>
-            <dd>{fmt1(e.weeksOfCover)}</dd>
             <dt>Thresholds used</dt>
             <dd>
               stockout &lt; {e.stockoutThresholdWeeks} wks, overstock &gt; {e.overstockThresholdWeeks} wks, high demand &gt;
@@ -142,43 +213,23 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
               {e.weeksOfHistory}
               {e.missingWeeks.length > 0 && <span className="muted"> (missing {e.missingWeeks.join(", ")})</span>}
             </dd>
+            <dt>Festival month</dt>
+            <dd>{e.festivalMonth ? `Yes (+${Math.round(t.festivalUpliftPct * 100)}%)` : "No"}</dd>
           </dl>
-        </div>
-
-        <div className="card">
-          <h2>Rules</h2>
-          <ul className="rules">
-            {checks.map((c) => (
-              <li key={c.rule}>
-                <span className={c.fired ? "fired" : "not-fired"}>{c.fired ? "✔ fired" : "✘ not fired"}</span> —{" "}
-                <strong>{RULE_LABELS[c.rule]}</strong>: {c.text}
-              </li>
-            ))}
-            {otherFired.map((r) => (
-              <li key={r}>
-                <span className="fired">✔ fired</span> — <strong>{RULE_LABELS[r]}</strong>
-              </li>
-            ))}
-          </ul>
-          {e.exceptionReasons.length > 0 && (
-            <>
-              <h2>Why this is an exception</h2>
-              <ul>
-                {e.exceptionReasons.map((r) => (
-                  <li key={r}>{r}</li>
-                ))}
-              </ul>
-            </>
-          )}
-          <p>
-            <strong>Engine reason:</strong> {rec.reason}
-          </p>
         </div>
       </div>
 
       <div className="grid-2">
         <div className="card stack">
-          <h2>Gemini explanation</h2>
+          <div className="card-head" style={{ marginBottom: 0 }}>
+            <h2>
+              <span className="ai-tag" style={{ fontSize: 15 }}>
+                <SparkIcon size={16} />
+              </span>{" "}
+              AI explanation
+            </h2>
+            {rec.action !== "NONE" && <RegenerateForm recommendationId={rec.id} enabled={geminiConfigured()} />}
+          </div>
           {rec.action === "NONE" ? (
             <p className="muted">No action recommended, so no explanation is generated.</p>
           ) : ai?.reason ? (
@@ -191,7 +242,7 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
                   <strong>Planner brief:</strong> {ai.brief}
                 </p>
               )}
-              <div className="muted">
+              <div className="muted small">
                 {ai.model} · {fmtDateTime(ai.createdAt)} · wording only; numbers and action come from the engine
               </div>
             </div>
@@ -199,11 +250,10 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
             <p className="muted">Not generated yet.</p>
           )}
           {ai?.error && <div className="status status-error">Last attempt failed: {ai.error}</div>}
-          {rec.action !== "NONE" && <RegenerateForm recommendationId={rec.id} enabled={geminiConfigured()} />}
         </div>
 
         <div className="card stack">
-          <h2>Review</h2>
+          <h2>Your decision</h2>
           {rec.action === "NONE" ? (
             <p className="muted">Nothing to review.</p>
           ) : (
@@ -214,13 +264,13 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
                   {fmtInt(rec.finalQuantity)}. You can record a new decision below.
                 </p>
               )}
-              <ReviewForm recommendationId={rec.id} quantity={rec.quantity} action={rec.action} />
+              <ReviewForm recommendationId={rec.id} quantity={rec.quantity} action={rec.action} askName />
             </>
           )}
         </div>
       </div>
 
-      <div className="card">
+      <div className="card" style={{ marginTop: 20 }}>
         <h2>Decision history</h2>
         {audit.length === 0 ? (
           <p className="muted">No decisions yet.</p>
@@ -257,7 +307,7 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
           </div>
         )}
         {otherRuns.length > 1 && (
-          <p className="muted">
+          <p className="muted small">
             Recent runs:{" "}
             {otherRuns.map((o) => `#${o.runId} ${actionText(o.action, o.quantity)}`).join(" · ")}
           </p>

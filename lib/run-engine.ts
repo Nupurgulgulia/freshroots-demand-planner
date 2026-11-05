@@ -1,6 +1,6 @@
 // Loads everything from the database, runs the rules, and stores a new run.
 
-import { desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import type { Db } from "@/lib/db";
 import { schema } from "@/lib/db";
 import { evaluateAll, type Evaluation } from "@/lib/rules/engine";
@@ -55,6 +55,17 @@ export async function runEngine(db: Db, triggeredBy: string) {
 export async function getLatestRun(db: Db) {
   const [run] = await db.select().from(schema.runs).orderBy(desc(schema.runs.id)).limit(1);
   return run ?? null;
+}
+
+/** How many recommendations of the latest run still wait for a decision. */
+export async function getPendingCount(db: Db) {
+  const run = await getLatestRun(db);
+  if (!run) return 0;
+  const [row] = await db
+    .select({ n: count() })
+    .from(schema.recommendations)
+    .where(and(eq(schema.recommendations.runId, run.id), eq(schema.recommendations.status, "PENDING")));
+  return row?.n ?? 0;
 }
 
 /** Recommendations of a run joined with SKU names and cached AI text. */

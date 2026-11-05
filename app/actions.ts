@@ -21,8 +21,8 @@ export interface ActionState {
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 
 function revalidateAll() {
-  for (const p of ["/", "/review", "/approved", "/settings", "/upload"]) revalidatePath(p);
-  revalidatePath("/sku/[skuId]", "page");
+  // The whole app, including the sidebar's pending-review count.
+  revalidatePath("/", "layout");
 }
 
 export async function recalculateAction(_prev: ActionState, fd: FormData): Promise<ActionState> {

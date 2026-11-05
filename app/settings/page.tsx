@@ -27,11 +27,15 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <h1>Settings</h1>
-      <p className="muted">
-        Changes apply the next time you press Recalculate on the dashboard. Existing runs keep the thresholds they were
-        calculated with.
-      </p>
+      <div className="page-head">
+        <div>
+          <h1>Settings</h1>
+          <p className="muted">
+            Changes apply the next time you press Recalculate on the dashboard. Existing runs keep the thresholds they
+            were calculated with.
+          </p>
+        </div>
+      </div>
 
       <div className="grid-2">
         <div className="card">
@@ -73,11 +77,11 @@ export default async function SettingsPage() {
               </tbody>
             </table>
           </div>
-          <p className="muted">Toggling uses the name entered in the forms on this page.</p>
+          <p className="muted small">Toggling uses the name entered in the forms on this page.</p>
         </div>
       </div>
 
-      <div className="card">
+      <div className="card" style={{ marginTop: 20 }}>
         <h2>Change log</h2>
         {log.length === 0 ? (
           <p className="muted">No changes yet.</p>

@@ -1,46 +1,36 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { logoutAction } from "./login/actions";
-import { appPassword } from "@/lib/auth";
+import { Inter } from "next/font/google";
+import { cookies } from "next/headers";
+import { Sidebar } from "@/components/Sidebar";
+import { SESSION_COOKIE, appPassword, isValidSession } from "@/lib/auth";
+import { getDb } from "@/lib/db";
+import { getPendingCount } from "@/lib/run-engine";
 import "./globals.css";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "Freshroots Demand Planner",
   description: "Weekly reorder recommendations from sales and stock data.",
 };
 
-const NAV = [
-  { href: "/", label: "Dashboard" },
-  { href: "/review", label: "Review" },
-  { href: "/approved", label: "Approved orders" },
-  { href: "/upload", label: "Upload data" },
-  { href: "/settings", label: "Settings" },
-];
+async function signedIn(password: string | null) {
+  if (!password) return true;
+  return isValidSession((await cookies()).get(SESSION_COOKIE)?.value, password);
+}
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const password = appPassword();
+  // Only query (and render) the review count for signed-in visitors.
+  const pendingCount = (await signedIn(password)) ? await getPendingCount(await getDb()).catch(() => 0) : 0;
+
   return (
-    <html lang="en-IN">
+    <html lang="en-IN" className={inter.variable}>
       <body>
-        <header className="topbar">
-          <Link href="/" className="brand">
-            Freshroots Demand Planner
-          </Link>
-          <nav>
-            {NAV.map((n) => (
-              <Link key={n.href} href={n.href}>
-                {n.label}
-              </Link>
-            ))}
-          </nav>
-          {appPassword() && (
-            <form action={logoutAction} className="signout">
-              <button type="submit" className="link-button">
-                Sign out
-              </button>
-            </form>
-          )}
-        </header>
-        <main className="container">{children}</main>
+        <div className="app">
+          <Sidebar pendingCount={pendingCount} showSignOut={Boolean(password)} />
+          <main className="container">{children}</main>
+        </div>
       </body>
     </html>
   );

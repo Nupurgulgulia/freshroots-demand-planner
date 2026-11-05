@@ -11,7 +11,7 @@ export function LoginForm({ next }: { next: string }) {
       <input
         type="password"
         name="password"
-        placeholder="Password"
+        placeholder="Team password"
         autoComplete="current-password"
         required
         autoFocus
