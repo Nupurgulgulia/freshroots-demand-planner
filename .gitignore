@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+.vercel
+# local database (PGlite) used when DATABASE_URL is not set
+.pglite/
+# secrets
+.env
+.env*.local
