@@ -6,7 +6,7 @@ coverage/
 next-env.d.ts
 .vercel
 # local database (PGlite) used when DATABASE_URL is not set
-.pglite/
+.pglite*/
 # secrets
 .env
 .env*.local

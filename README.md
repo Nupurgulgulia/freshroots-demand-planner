@@ -69,6 +69,9 @@ npm test                        # unit tests
 With **no `DATABASE_URL`**, the app uses an embedded Postgres ([PGlite](https://pglite.dev)) stored in `./.pglite`,
 so you can run it locally with no setup. PGlite allows only one process at a time, so stop `npm run dev` before
 running `npm run db:seed`, or load the data through the Upload page instead. Delete `./.pglite` to start from scratch.
+If the dev server is killed hard (not stopped with Ctrl+C), PGlite can be left unopenable and pages fail with
+"PGlite failed to initialize properly". If that happens, delete or rename `./.pglite` and run `npm run db:seed`
+again. This affects only the local fallback, not Neon.
 
 With **`DATABASE_URL` set**, the same code talks to Neon. Database migrations (in `./drizzle`) run automatically
 the first time the app or the seed script connects.
@@ -86,10 +89,11 @@ reason is shown instead.
 | --- | --- | --- |
 | `DATABASE_URL` | On Vercel, yes. Locally, no | Neon Postgres connection string (pooled or direct). |
 | `GEMINI_API_KEY` | For AI text | Google AI Studio / Gemini API key. |
-| `GEMINI_MODEL` | No | Model name. Defaults to `gemini-2.5-flash`. Check the current model list in Google's docs and set this explicitly. |
+| `GEMINI_MODEL` | No | Model name. Defaults to `gemini-3.8-flash` (`gemini-2.5-flash` is no longer offered to new API users). Check the current model list in Google's docs and set this explicitly. |
 | `PGLITE_DIR` | No | Where the local PGlite data lives (default `./.pglite`). |
 
-Keys belong in `.env.local` locally and in Vercel project settings in production. `.env*` files are git-ignored;
+Next.js loads `.env.local` at startup. The startup log shows `- Environments: .env.local` when it does. Restart
+`npm run dev` after editing the file. Keys belong in `.env.local` locally and in Vercel project settings in production. `.env*` files are git-ignored;
 never commit them.
 
 ## Deploying on Vercel
