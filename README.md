@@ -90,6 +90,7 @@ reason is shown instead.
 | `DATABASE_URL` | On Vercel, yes. Locally, no | Neon Postgres connection string (pooled or direct). |
 | `GEMINI_API_KEY` | For AI text | Google AI Studio / Gemini API key. |
 | `GEMINI_MODEL` | No | Model name. Defaults to `gemini-3.8-flash` (`gemini-2.5-flash` is no longer offered to new API users). Check the current model list in Google's docs and set this explicitly. |
+| `APP_PASSWORD` | On Vercel, yes | Shared password for the whole site. Every page, form submission and the CSV export require it. Changing it signs everyone out. If it is empty, the site is open, which is fine for local use only. |
 | `PGLITE_DIR` | No | Where the local PGlite data lives (default `./.pglite`). |
 
 Next.js loads `.env.local` at startup. The startup log shows `- Environments: .env.local` when it does. Restart
@@ -104,7 +105,7 @@ never commit them.
    automatically), or create a Neon project yourself and add its connection string as `DATABASE_URL`.
    **`DATABASE_URL` must be set on Vercel**: the PGlite fallback needs a writable disk, which serverless functions
    don't have.
-3. Add `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`) under Project → Settings → Environment Variables.
+3. Add `APP_PASSWORD`, `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`) under Project → Settings → Environment Variables.
 4. Deploy. Migrations run on the first request.
 5. Load the data, either:
    - locally: put the Neon `DATABASE_URL` in `.env.local` and run `npm run db:seed`, or
@@ -114,6 +115,14 @@ The migration SQL ships with the functions through `outputFileTracingIncludes` i
 
 To change the schema, edit `lib/db/schema.ts`, run `npx drizzle-kit generate --name <change>`, and commit the new
 file in `./drizzle`.
+
+## Access control (temporary)
+
+Until real sign-in exists, the whole site sits behind one shared password (`APP_PASSWORD`). `proxy.ts` (Next.js
+16's name for middleware) redirects anyone without a valid session cookie to `/login`, and returns 401 to form
+submissions and the CSV export. The cookie is an HMAC of the password, lasts 30 days, and is httpOnly. **Sign out**
+clears it. The reviewer name is still typed by hand, so the audit log records who people *say* they are. Replace
+this with Auth.js (Google or email link) before go-live.
 
 ## How Gemini is kept away from the numbers
 

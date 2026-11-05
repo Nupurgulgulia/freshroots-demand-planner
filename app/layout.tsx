@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { logoutAction } from "./login/actions";
+import { appPassword } from "@/lib/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -30,6 +32,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </Link>
             ))}
           </nav>
+          {appPassword() && (
+            <form action={logoutAction} className="signout">
+              <button type="submit" className="link-button">
+                Sign out
+              </button>
+            </form>
+          )}
         </header>
         <main className="container">{children}</main>
       </body>
