@@ -8,6 +8,7 @@ import * as schema from "./schema";
 export type Db = PgDatabase<PgQueryResultHKT, typeof schema>;
 
 const MIGRATIONS = path.join(process.cwd(), "drizzle");
+const MIGRATION_LOCK_ID = 727_274_001;
 
 const globalForDb = globalThis as unknown as { dbPromise?: Promise<Db>; close?: () => Promise<void> };
 
@@ -19,9 +20,17 @@ async function connect(): Promise<Db> {
     const { migrate } = await import("drizzle-orm/neon-serverless/migrator");
     const pool = new Pool({ connectionString: url });
     globalForDb.close = () => pool.end();
-    const db = drizzle({ client: pool, schema });
-    await migrate(db, { migrationsFolder: MIGRATIONS });
-    return db as unknown as Db;
+    // Several serverless instances can cold-start at once; an advisory lock makes
+    // them apply migrations one at a time instead of racing on CREATE TABLE.
+    const lockClient = await pool.connect();
+    try {
+      await lockClient.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK_ID]);
+      await migrate(drizzle({ client: lockClient, schema }), { migrationsFolder: MIGRATIONS });
+    } finally {
+      await lockClient.query("SELECT pg_advisory_unlock($1)", [MIGRATION_LOCK_ID]).catch(() => {});
+      lockClient.release();
+    }
+    return drizzle({ client: pool, schema }) as unknown as Db;
   }
   const { PGlite } = await import("@electric-sql/pglite");
   const { drizzle } = await import("drizzle-orm/pglite");
