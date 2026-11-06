@@ -50,6 +50,8 @@ export const skus = pgTable("skus", {
   standardReorderQty: integer("standard_reorder_qty").notNull(),
   unitOfMeasure: text("unit_of_measure").notNull(),
   distributorId: text("distributor_id").notNull(),
+  /** Optional ₹ per unit (Unit_Price in sku_master.csv), used only to show rupee exposure. */
+  unitPrice: doublePrecision("unit_price"),
 });
 
 export const weeklySales = pgTable(
@@ -88,6 +90,35 @@ export const openPurchaseOrders = pgTable(
   },
   (t) => [primaryKey({ columns: [t.poNumber, t.skuId] })],
 );
+
+/** Every stock upload is kept as a dated snapshot; `inventory` holds only the latest one for the rules. */
+export const inventorySnapshots = pgTable(
+  "inventory_snapshots",
+  {
+    id: serial("id").primaryKey(),
+    snapshotAt: timestamp("snapshot_at", { withTimezone: true }).notNull(), // same for every row of one upload
+    skuId: text("sku_id").notNull(),
+    location: text("location").notNull(),
+    unitsOnHand: integer("units_on_hand").notNull(),
+    asOfDate: text("as_of_date").notNull(),
+  },
+  (t) => [index("inventory_snapshots_at_idx").on(t.snapshotAt)],
+);
+
+/**
+ * Quarterly loss figures typed in by hand (e.g. by Deepa via a planner). Shown as "entered", never as
+ * measured by the app; the app has no way to check them.
+ */
+export const quarterlyFigures = pgTable("quarterly_figures", {
+  quarter: text("quarter").primaryKey(), // e.g. 2026-Q3
+  baselineLoss: doublePrecision("baseline_loss"), // ₹, before the planner
+  targetLoss: doublePrecision("target_loss"), // ₹
+  actualLoss: doublePrecision("actual_loss"), // ₹, entered after the quarter
+  note: text("note"),
+  enteredBy: text("entered_by").notNull(),
+  userId: integer("user_id").references(() => users.id),
+  enteredAt: timestamp("entered_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const festivalCalendar = pgTable("festival_calendar", {
   yearMonth: text("year_month").primaryKey(), // YYYY-MM

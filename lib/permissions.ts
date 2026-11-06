@@ -20,6 +20,7 @@ export type Permission =
   | "upload"
   | "recalculate"
   | "generateAi"
+  | "enterFigures" // quarterly loss figures on the Performance page
   | "viewSettings"
   | "editSettings"
   | "viewApproved"
@@ -37,6 +38,7 @@ const MATRIX: Record<Role, Permission[]> = {
     "upload",
     "recalculate",
     "generateAi",
+    "enterFigures",
     "viewSettings",
     "editSettings",
     "viewApproved",

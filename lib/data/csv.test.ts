@@ -62,3 +62,22 @@ describe("open_purchase_orders.csv", () => {
     expect(errors.join("\n")).toMatch(/duplicate PO_Number \+ SKU_ID/);
   });
 });
+
+describe("optional Unit_Price in sku_master.csv", () => {
+  const header = "SKU_ID,SKU_Name,Category,Perishability,Standard_Reorder_Qty,Unit_of_Measure,Distributor_ID";
+
+  it("works without the column, and reports which columns were present", () => {
+    const { rows, errors, columns } = parseDataset("sku_master", `${header}\nS1,Rice,Staple,Low,100,Units,D1`);
+    expect(errors).toEqual([]);
+    expect(rows[0].Unit_Price).toBeUndefined();
+    expect(columns).not.toContain("Unit_Price");
+  });
+
+  it("reads prices, allows blanks, and rejects negatives", () => {
+    const ok = parseDataset("sku_master", `${header},Unit_Price\nS1,Rice,Staple,Low,100,Units,D1,42.5\nS2,Oats,Staple,Low,50,Units,D1,`);
+    expect(ok.errors).toEqual([]);
+    expect(ok.rows.map((r) => r.Unit_Price)).toEqual([42.5, undefined]);
+    const bad = parseDataset("sku_master", `${header},Unit_Price\nS1,Rice,Staple,Low,100,Units,D1,-3`);
+    expect(bad.errors.join(" ")).toMatch(/Unit_Price/);
+  });
+});

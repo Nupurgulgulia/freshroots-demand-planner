@@ -24,7 +24,12 @@ function excluded<T extends PgTable>(table: T, fields: (keyof T["_"]["columns"] 
  * Loads one dataset. Master data, sales and calendar rows are upserted by key;
  * current_inventory and open_purchase_orders are snapshots, so they replace the whole table.
  */
-export async function saveDataset<D extends DatasetName>(db: Db, dataset: D, rows: DatasetRow<D>[]) {
+export async function saveDataset<D extends DatasetName>(
+  db: Db,
+  dataset: D,
+  rows: DatasetRow<D>[],
+  columns: string[] = [],
+) {
   await db.transaction(async (tx) => {
     switch (dataset) {
       case "distributor_master": {
@@ -54,7 +59,10 @@ export async function saveDataset<D extends DatasetName>(db: Db, dataset: D, row
           standardReorderQty: r.Standard_Reorder_Qty,
           unitOfMeasure: r.Unit_of_Measure,
           distributorId: r.Distributor_ID,
+          unitPrice: r.Unit_Price ?? null,
         }));
+        // A file without a Unit_Price column leaves existing prices alone.
+        const priceColumn = columns.includes("Unit_Price") ? (["unitPrice"] as const) : [];
         for (const batch of chunks(values)) {
           await tx
             .insert(schema.skus)
@@ -68,6 +76,7 @@ export async function saveDataset<D extends DatasetName>(db: Db, dataset: D, row
                 "standardReorderQty",
                 "unitOfMeasure",
                 "distributorId",
+                ...priceColumn,
               ]),
             });
         }
@@ -99,6 +108,11 @@ export async function saveDataset<D extends DatasetName>(db: Db, dataset: D, row
         }));
         await tx.delete(schema.inventory);
         for (const batch of chunks(values)) await tx.insert(schema.inventory).values(batch);
+        // Keep every upload as a dated snapshot, so stock can be looked back on later.
+        const snapshotAt = new Date();
+        for (const batch of chunks(values)) {
+          await tx.insert(schema.inventorySnapshots).values(batch.map((v) => ({ ...v, snapshotAt })));
+        }
         break;
       }
       case "open_purchase_orders": {
@@ -161,10 +175,10 @@ export async function importCsv(
   uploadedBy: string,
   userId: number | null = null,
 ) {
-  const { rows, errors } = parseDataset(dataset, csv);
+  const { rows, errors, columns } = parseDataset(dataset, csv);
   if (errors.length > 0) return { ok: false as const, errors, rowCount: 0 };
   if (rows.length === 0) return { ok: false as const, errors: ["The file has no data rows."], rowCount: 0 };
-  await saveDataset(db, dataset, rows);
+  await saveDataset(db, dataset, rows, columns);
   await db.insert(schema.uploads).values({ dataset, fileName, rowCount: rows.length, uploadedBy, userId });
   return { ok: true as const, errors: [], rowCount: rows.length };
 }

@@ -28,6 +28,11 @@ export const datasetSchemas = {
     Standard_Reorder_Qty: z.coerce.number().int().positive(),
     Unit_of_Measure: text,
     Distributor_ID: text,
+    // Optional column: ₹ per unit, only used to show rupee exposure.
+    Unit_Price: z.preprocess(
+      (v) => (v == null || (typeof v === "string" && v.trim() === "") ? undefined : v),
+      z.coerce.number().nonnegative().optional(),
+    ),
   }),
   distributor_master: z.object({
     Distributor_ID: text,
@@ -68,6 +73,9 @@ export const DATASET_NAMES = Object.keys(datasetSchemas) as DatasetName[];
 /** Datasets the seed script loads only when the file exists. */
 export const OPTIONAL_DATASETS: DatasetName[] = ["open_purchase_orders"];
 
+/** Columns a file may leave out entirely. */
+export const OPTIONAL_COLUMNS: Partial<Record<DatasetName, string[]>> = { sku_master: ["Unit_Price"] };
+
 export function datasetColumns(dataset: DatasetName): string[] {
   return Object.keys(datasetSchemas[dataset].shape);
 }
@@ -86,6 +94,8 @@ const keyColumns: Record<DatasetName, string[]> = {
 export interface ParseResult<D extends DatasetName> {
   rows: DatasetRow<D>[];
   errors: string[];
+  /** Column names found in the file (so optional columns that are absent aren't overwritten). */
+  columns: string[];
 }
 
 export function parseDataset<D extends DatasetName>(dataset: D, csv: string): ParseResult<D> {
@@ -97,10 +107,11 @@ export function parseDataset<D extends DatasetName>(dataset: D, csv: string): Pa
   });
   const errors: string[] = parsed.errors.map((e) => `Row ${(e.row ?? 0) + 2}: ${e.message}`);
 
-  const expected = datasetColumns(dataset);
-  const missing = expected.filter((c) => !parsed.meta.fields?.includes(c));
+  const columns = parsed.meta.fields ?? [];
+  const optional: string[] = OPTIONAL_COLUMNS[dataset] ?? [];
+  const missing = datasetColumns(dataset).filter((c) => !optional.includes(c) && !columns.includes(c));
   if (missing.length) {
-    return { rows: [], errors: [`Missing column(s): ${missing.join(", ")}`] };
+    return { rows: [], errors: [`Missing column(s): ${missing.join(", ")}`], columns };
   }
 
   const rows: DatasetRow<D>[] = [];
@@ -123,7 +134,7 @@ export function parseDataset<D extends DatasetName>(dataset: D, csv: string): Pa
     seen.add(key);
     rows.push(result.data as DatasetRow<D>);
   });
-  return { rows, errors };
+  return { rows, errors, columns };
 }
 
 /** Guesses the dataset from a file name like "weekly_sales.csv". */

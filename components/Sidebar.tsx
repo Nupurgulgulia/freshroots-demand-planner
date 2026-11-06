@@ -9,6 +9,7 @@ import {
   LogoutIcon,
   ReviewIcon,
   SettingsIcon,
+  TrendUpIcon,
   TruckIcon,
   UploadIcon,
 } from "@/components/icons";
@@ -18,6 +19,7 @@ const NAV = [
   { href: "/", label: "Dashboard", Icon: DashboardIcon },
   { href: "/review", label: "Review", Icon: ReviewIcon },
   { href: "/approved", label: "Approved orders", Icon: TruckIcon },
+  { href: "/performance", label: "Performance", Icon: TrendUpIcon },
   { href: "/upload", label: "Upload data", Icon: UploadIcon },
   { href: "/settings", label: "Settings", Icon: SettingsIcon },
 ];

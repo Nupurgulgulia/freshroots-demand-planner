@@ -9,6 +9,7 @@ import {
   reviewAction,
   saveThresholdsAction,
   confirmQuantityAction,
+  saveFiguresAction,
   syncZohoAction,
   uploadAction,
   changePasswordAction,
@@ -193,6 +194,40 @@ export function ConfirmQuantityForm({ recommendationId }: { recommendationId: nu
         <button type="submit" disabled={pending} className="small">
           <CheckIcon size={14} />
           {pending ? "Confirming…" : "Confirm"}
+        </button>
+      </div>
+      <Status state={state} />
+    </form>
+  );
+}
+
+/** Planners type in a quarter's loss figures (₹). They are shown as "entered", never as measured. */
+export function FiguresForm({ defaultQuarter }: { defaultQuarter: string }) {
+  const [state, action, pending] = useActionState(saveFiguresAction, {});
+  return (
+    <form action={action} className="stack">
+      <div className="figures-grid">
+        <label>
+          <span className="muted small">Quarter</span>
+          <input name="quarter" defaultValue={defaultQuarter} placeholder="2026-Q3" pattern="\d{4}-[Qq][1-4]" required />
+        </label>
+        <label>
+          <span className="muted small">Baseline loss (₹)</span>
+          <input name="baseline" inputMode="decimal" placeholder="e.g. 450000" />
+        </label>
+        <label>
+          <span className="muted small">Target loss (₹)</span>
+          <input name="target" inputMode="decimal" placeholder="e.g. 300000" />
+        </label>
+        <label>
+          <span className="muted small">Actual loss (₹)</span>
+          <input name="actual" inputMode="decimal" placeholder="after the quarter" />
+        </label>
+      </div>
+      <div className="row">
+        <input name="note" placeholder="Where these figures come from (optional)" className="note-input" />
+        <button type="submit" disabled={pending}>
+          {pending ? "Saving…" : "Save figures"}
         </button>
       </div>
       <Status state={state} />

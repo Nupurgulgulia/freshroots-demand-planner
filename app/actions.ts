@@ -13,6 +13,7 @@ import type { Thresholds } from "@/lib/rules/engine";
 import { requireAction } from "@/lib/session";
 import { THRESHOLD_DEFS, fromDisplay } from "@/lib/settings";
 import { setFestivalMonth, updateThresholds } from "@/lib/settings-update";
+import { saveQuarterlyFigures } from "@/lib/performance-data";
 import { changePassword } from "@/lib/users";
 import { fetchOpenPurchaseOrders, zohoConfig } from "@/lib/zoho/inventory";
 import { toPurchaseOrderLines } from "@/lib/zoho/purchase-orders";
@@ -224,6 +225,30 @@ export async function syncZohoAction(_prev: ActionState, fd: FormData): Promise<
   } catch (err) {
     return { ok: false, message: (err as Error).message };
   }
+}
+
+const rupees = (fd: FormData, key: string) => {
+  const raw = str(fd, key).replace(/[₹,\s]/g, "");
+  return raw === "" ? null : Number(raw);
+};
+
+export async function saveFiguresAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const { user, error } = await requireAction("enterFigures");
+  if (!user) return { ok: false, message: error };
+  const result = await saveQuarterlyFigures(
+    await getDb(),
+    {
+      quarter: str(fd, "quarter").toUpperCase(),
+      baselineLoss: rupees(fd, "baseline"),
+      targetLoss: rupees(fd, "target"),
+      actualLoss: rupees(fd, "actual"),
+      note: str(fd, "note") || null,
+    },
+    user,
+  );
+  if (!result.ok) return { ok: false, message: result.error };
+  revalidateAll();
+  return { ok: true, message: "Saved. Shown as entered figures." };
 }
 
 export async function changePasswordAction(_prev: ActionState, fd: FormData): Promise<ActionState> {

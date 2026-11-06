@@ -29,6 +29,13 @@
       "when": 1793986783613,
       "tag": "0003_guardrails",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793988052665,
+      "tag": "0004_performance",
+      "breakpoints": true
     }
   ]
 }

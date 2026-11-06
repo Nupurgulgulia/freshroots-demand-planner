@@ -55,3 +55,9 @@ export function latestWeek(weeks: Iterable<string>): string | null {
   for (const w of weeks) if (latest === null || w > latest) latest = w;
   return latest;
 }
+
+/** The `count` ISO weeks straight after `week`, oldest first. */
+export function weeksAfter(week: string, count: number): string[] {
+  const monday = isoWeekMonday(week).getTime();
+  return Array.from({ length: count }, (_, i) => dateToIsoWeek(new Date(monday + (i + 1) * 7 * DAY_MS)));
+}

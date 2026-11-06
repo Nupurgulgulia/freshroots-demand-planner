@@ -2008,8 +2008,18 @@ a:focus-visible {
   }
 
   .side-link {
-    padding: 8px;
-    gap: 4px;
+    padding: 7px 5px;
+    gap: 3px;
+  }
+
+  .side-user {
+    padding: 2px;
+  }
+
+  .side-user .avatar {
+    width: 26px;
+    height: 26px;
+    font-size: 11px;
   }
 
   .container {
@@ -2193,5 +2203,68 @@ a:focus-visible {
     font-weight: 500;
     color: var(--faint);
     margin-bottom: 2px;
+  }
+}
+
+/* ---------- Performance ---------- */
+
+.status-warning {
+  background: var(--overstock-bg);
+  color: var(--overstock-fg);
+}
+
+.figures-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.figures-grid label {
+  display: grid;
+  gap: 4px;
+}
+
+/* Very small phones: drop the logo from the top bar so all icons fit. */
+@media (max-width: 360px) {
+  .sidebar .brand {
+    display: none;
+  }
+}
+
+/* Narrow phones: stack label/value lists and form tables instead of widening the page. */
+@media (max-width: 480px) {
+  .kv {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .kv dd {
+    margin-bottom: 8px;
+  }
+
+  .review-form.compact {
+    min-width: 0;
+  }
+
+  .table.plain,
+  .table.plain tbody,
+  .table.plain tr,
+  .table.plain td {
+    display: block;
+    width: 100%;
+  }
+
+  .table.plain td {
+    padding: 4px 0;
+    border: none;
+  }
+
+  .table.plain tr {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .table.plain .num {
+    text-align: left !important;
   }
 }
