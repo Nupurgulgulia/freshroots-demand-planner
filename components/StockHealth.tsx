@@ -64,7 +64,16 @@ function Momentum({ change, highDemandPct }: { change: number | null; highDemand
   );
 }
 
-export function StockHealth({ rows, highDemandPct }: { rows: HealthRow[]; highDemandPct: number }) {
+export function StockHealth({
+  rows,
+  highDemandPct,
+  linkToSku = true,
+}: {
+  rows: HealthRow[];
+  highDemandPct: number;
+  /** Viewers can't open SKU pages, so their rows aren't links. */
+  linkToSku?: boolean;
+}) {
   const sorted = rows
     .filter((r) => r.cover != null)
     .map((r) => ({ ...r, pos: coverPosition(r.cover!, r.stockout, r.overstock) }))
@@ -102,7 +111,7 @@ export function StockHealth({ rows, highDemandPct }: { rows: HealthRow[]; highDe
           const z = zone(r.cover!, r.stockout, r.overstock);
           return (
             <li key={r.skuId}>
-              <Link href={`/sku/${r.skuId}`} className="health-row">
+              <RowLink href={linkToSku ? `/sku/${r.skuId}` : null}>
                 <span className="health-name" title={r.name}>
                   <span className="nm">{r.name}</span>
                   {r.perishable && <span className="tag perishable">P</span>}
@@ -121,11 +130,21 @@ export function StockHealth({ rows, highDemandPct }: { rows: HealthRow[]; highDe
                   </span>
                   <span className={`bullet-value v-${z}`}>{fmtCover(r.cover, [r.stockout, r.overstock])}</span>
                 </span>
-              </Link>
+              </RowLink>
             </li>
           );
         })}
       </ul>
     </>
+  );
+}
+
+function RowLink({ href, children }: { href: string | null; children: React.ReactNode }) {
+  return href ? (
+    <Link href={href} className="health-row">
+      {children}
+    </Link>
+  ) : (
+    <div className="health-row">{children}</div>
   );
 }

@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { cookies } from "next/headers";
 import { Sidebar } from "@/components/Sidebar";
-import { SESSION_COOKIE, appPassword, isValidSession } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { can } from "@/lib/permissions";
 import { getPendingCount } from "@/lib/run-engine";
+import { currentUser } from "@/lib/session";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -14,21 +14,17 @@ export const metadata: Metadata = {
   description: "Weekly reorder recommendations from sales and stock data.",
 };
 
-async function signedIn(password: string | null) {
-  if (!password) return true;
-  return isValidSession((await cookies()).get(SESSION_COOKIE)?.value, password);
-}
-
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const password = appPassword();
-  // Only query (and render) the review count for signed-in visitors.
-  const pendingCount = (await signedIn(password)) ? await getPendingCount(await getDb()).catch(() => 0) : 0;
+  const user = await currentUser();
+  // The review count is only shown to roles that can open the Review page.
+  const pendingCount =
+    user && can(user.role, "viewReview") ? await getPendingCount(await getDb()).catch(() => 0) : 0;
 
   return (
     <html lang="en-IN" className={inter.variable}>
       <body>
         <div className="app">
-          <Sidebar pendingCount={pendingCount} showSignOut={Boolean(password)} />
+          {user && <Sidebar pendingCount={pendingCount} user={{ username: user.username, role: user.role }} />}
           <main className="container">{children}</main>
         </div>
       </body>

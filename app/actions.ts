@@ -9,8 +9,10 @@ import { importCsv, replaceOpenPurchaseOrders } from "@/lib/data/load";
 import { reviewRecommendation, type Decision } from "@/lib/review";
 import { getLatestRun, runEngine } from "@/lib/run-engine";
 import type { Thresholds } from "@/lib/rules/engine";
+import { requireAction } from "@/lib/session";
 import { THRESHOLD_DEFS, fromDisplay } from "@/lib/settings";
 import { setFestivalMonth, updateThresholds } from "@/lib/settings-update";
+import { changePassword } from "@/lib/users";
 import { fetchOpenPurchaseOrders, zohoConfig } from "@/lib/zoho/inventory";
 import { toPurchaseOrderLines } from "@/lib/zoho/purchase-orders";
 
@@ -20,6 +22,9 @@ export interface ActionState {
   errors?: string[];
 }
 
+// Every action below starts with requireAction(...): the user comes from the session (never a typed
+// name), is re-checked against the database, and must have the permission for that action.
+
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 
 function revalidateAll() {
@@ -27,10 +32,12 @@ function revalidateAll() {
   revalidatePath("/", "layout");
 }
 
-export async function recalculateAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+export async function recalculateAction(_prev: ActionState, _fd: FormData): Promise<ActionState> {
+  const { user, error } = await requireAction("recalculate");
+  if (!user) return { ok: false, message: error };
   try {
     const db = await getDb();
-    const run = await runEngine(db, str(fd, "name") || "planner");
+    const run = await runEngine(db, user.username, user.id);
     revalidateAll();
     return { ok: true, message: `Run #${run.id} created for week ${run.nowWeek}.` };
   } catch (err) {
@@ -39,6 +46,8 @@ export async function recalculateAction(_prev: ActionState, fd: FormData): Promi
 }
 
 export async function generateExplanationsAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const { user, error } = await requireAction("generateAi");
+  if (!user) return { ok: false, message: error };
   if (!geminiConfigured()) return { ok: false, message: "GEMINI_API_KEY is not set, so explanations are off." };
   const db = await getDb();
   const run = await getLatestRun(db);
@@ -51,6 +60,8 @@ export async function generateExplanationsAction(_prev: ActionState, fd: FormDat
 }
 
 export async function regenerateAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const { user, error } = await requireAction("generateAi");
+  if (!user) return { ok: false, message: error };
   if (!geminiConfigured()) return { ok: false, message: "GEMINI_API_KEY is not set." };
   const db = await getDb();
   const result = await explainRecommendation(db, Number(fd.get("recommendationId")), true);
@@ -59,12 +70,15 @@ export async function regenerateAction(_prev: ActionState, fd: FormData): Promis
 }
 
 export async function reviewAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const { user, error } = await requireAction("review");
+  if (!user) return { ok: false, message: error };
   const qty = str(fd, "quantity");
   const db = await getDb();
   const result = await reviewRecommendation(db, {
     recommendationId: Number(fd.get("recommendationId")),
     decision: str(fd, "decision") as Decision,
-    reviewer: str(fd, "reviewer"),
+    reviewer: user.username,
+    userId: user.id,
     quantity: qty === "" ? null : Number(qty),
     note: str(fd, "note") || null,
   });
@@ -74,13 +88,15 @@ export async function reviewAction(_prev: ActionState, fd: FormData): Promise<Ac
 }
 
 export async function saveThresholdsAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const { user, error } = await requireAction("editSettings");
+  if (!user) return { ok: false, errors: [error] };
   const next = {} as Thresholds;
   for (const d of THRESHOLD_DEFS) {
     const raw = str(fd, d.key);
     next[d.key] = raw === "" ? NaN : fromDisplay(d, Number(raw));
   }
   const db = await getDb();
-  const result = await updateThresholds(db, next, str(fd, "name"), str(fd, "note") || null);
+  const result = await updateThresholds(db, next, user.username, str(fd, "note") || null, user.id);
   if (!result.ok) return { ok: false, errors: result.errors };
   revalidateAll();
   return {
@@ -92,16 +108,24 @@ export async function saveThresholdsAction(_prev: ActionState, fd: FormData): Pr
 }
 
 export async function festivalMonthAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const { user, error } = await requireAction("editSettings");
+  if (!user) return { ok: false, message: error };
   const db = await getDb();
-  const result = await setFestivalMonth(db, str(fd, "yearMonth"), fd.get("isFestival") === "1", str(fd, "name"));
+  const result = await setFestivalMonth(
+    db,
+    str(fd, "yearMonth"),
+    fd.get("isFestival") === "1",
+    user.username,
+    user.id,
+  );
   if (!result.ok) return { ok: false, message: result.error };
   revalidateAll();
   return { ok: true, message: "Calendar updated. Recalculate on the dashboard to apply it." };
 }
 
 export async function uploadAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  const name = str(fd, "name");
-  if (!name) return { ok: false, errors: ["Enter your name."] };
+  const { user, error } = await requireAction("upload");
+  if (!user) return { ok: false, errors: [error] };
   const files = fd.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
   if (files.length === 0) return { ok: false, errors: ["Choose at least one CSV file."] };
   const chosen = str(fd, "dataset");
@@ -118,14 +142,14 @@ export async function uploadAction(_prev: ActionState, fd: FormData): Promise<Ac
       errors.push(`${file.name}: cannot tell which dataset this is. Name it like weekly_sales.csv or pick the type.`);
       continue;
     }
-    const result = await importCsv(db, dataset, await file.text(), file.name, name);
+    const result = await importCsv(db, dataset, await file.text(), file.name, user.username, user.id);
     if (result.ok) messages.push(`${file.name} → ${dataset}: ${result.rowCount} rows loaded.`);
     else errors.push(`${file.name} → ${dataset}: rejected, nothing saved.`, ...result.errors.slice(0, 20));
   }
 
   if (fd.get("rerun") === "1" && messages.length > 0 && errors.length === 0) {
     try {
-      const run = await runEngine(db, name);
+      const run = await runEngine(db, user.username, user.id);
       messages.push(`Engine run #${run.id} created for week ${run.nowWeek}.`);
     } catch (err) {
       errors.push((err as Error).message);
@@ -137,8 +161,8 @@ export async function uploadAction(_prev: ActionState, fd: FormData): Promise<Ac
 
 /** Replaces the open-PO snapshot with Zoho Inventory's open purchase orders, then optionally recalculates. */
 export async function syncZohoAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  const name = str(fd, "name");
-  if (!name) return { ok: false, errors: ["Enter your name."] };
+  const { user, error } = await requireAction("upload");
+  if (!user) return { ok: false, errors: [error] };
   const config = zohoConfig();
   if (!config) return { ok: false, errors: ["Zoho isn't connected yet. Set the ZOHO_* settings first (see the README)."] };
 
@@ -151,7 +175,8 @@ export async function syncZohoAction(_prev: ActionState, fd: FormData): Promise<
       dataset: "open_purchase_orders",
       fileName: "Zoho Inventory sync",
       rowCount: lines.length,
-      uploadedBy: name,
+      uploadedBy: user.username,
+      userId: user.id,
     });
 
     const known = new Set((await db.select({ id: schema.skus.skuId }).from(schema.skus)).map((r) => r.id));
@@ -161,7 +186,7 @@ export async function syncZohoAction(_prev: ActionState, fd: FormData): Promise<
     if (skippedNoSku) messages.push(`${skippedNoSku} line(s) had no SKU code in Zoho and were skipped.`);
 
     if (fd.get("rerun") === "1") {
-      const run = await runEngine(db, name);
+      const run = await runEngine(db, user.username, user.id);
       messages.push(`Engine run #${run.id} created for week ${run.nowWeek}.`);
     }
     revalidateAll();
@@ -169,4 +194,13 @@ export async function syncZohoAction(_prev: ActionState, fd: FormData): Promise<
   } catch (err) {
     return { ok: false, message: (err as Error).message };
   }
+}
+
+export async function changePasswordAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const { user, error } = await requireAction("viewDashboard");
+  if (!user) return { ok: false, message: error };
+  const next = String(fd.get("next") ?? "");
+  if (next !== String(fd.get("confirm") ?? "")) return { ok: false, message: "The two new passwords don't match." };
+  const result = await changePassword(await getDb(), user.id, String(fd.get("current") ?? ""), next);
+  return result.ok ? { ok: true, message: "Password changed." } : { ok: false, message: result.error };
 }

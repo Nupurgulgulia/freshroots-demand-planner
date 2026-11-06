@@ -1,22 +1,33 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, appPassword, isValidSession } from "@/lib/auth";
+import NextAuth from "next-auth";
+import { NextResponse } from "next/server";
+import { authConfig } from "@/auth.config";
+import { canOpen, isRole } from "@/lib/permissions";
 
-/** Every page, server action and the CSV export need the shared password. */
-export function proxy(request: NextRequest) {
-  const password = appPassword();
-  // No password configured (e.g. local dev): the site stays open.
-  if (!password) return NextResponse.next();
-  if (isValidSession(request.cookies.get(SESSION_COOKIE)?.value, password)) return NextResponse.next();
+const { auth } = NextAuth(authConfig);
 
-  if (request.method === "GET" || request.method === "HEAD") {
+/**
+ * Sends signed-out visitors to /login and keeps each role on the pages it may open. This is the first
+ * line only: every page and server action checks the user again against the database (lib/session.ts).
+ */
+export const proxy = auth((request) => {
+  const { pathname, search } = request.nextUrl;
+  const role = (request.auth?.user as { role?: unknown } | undefined)?.role;
+  const isPageLoad = request.method === "GET" || request.method === "HEAD";
+
+  if (!request.auth || !isRole(role)) {
+    if (!isPageLoad) return new NextResponse("Sign in required", { status: 401 });
     const login = new URL("/login", request.url);
-    login.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
+    login.searchParams.set("next", pathname + search);
     return NextResponse.redirect(login);
   }
-  return new NextResponse("Sign in required", { status: 401 });
-}
+  if (!canOpen(role, pathname)) {
+    if (!isPageLoad) return new NextResponse("Not allowed for your role", { status: 403 });
+    return NextResponse.redirect(new URL("/?denied=1", request.url));
+  }
+  return NextResponse.next();
+});
 
 export const config = {
-  // Everything except the login page, Next.js assets and the favicon.
-  matcher: ["/((?!login|_next/static|_next/image|favicon.ico).*)"],
+  // Everything except the login page, Auth.js's own routes, Next.js assets and the favicon.
+  matcher: ["/((?!login|api/auth|_next/static|_next/image|favicon.ico).*)"],
 };

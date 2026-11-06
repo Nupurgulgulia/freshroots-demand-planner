@@ -5,10 +5,12 @@ import { getDb } from "@/lib/db";
 import { fmtDateTime, fmtInt } from "@/lib/format";
 import { getApprovedOrders } from "@/lib/review";
 import { getLatestRun } from "@/lib/run-engine";
+import { requirePage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function ApprovedPage() {
+  await requirePage("viewApproved");
   const db = await getDb();
   const run = await getLatestRun(db);
   const orders = run ? await getApprovedOrders(db, run.id) : [];

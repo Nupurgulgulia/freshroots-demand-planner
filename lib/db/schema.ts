@@ -11,6 +11,28 @@ import {
   timestamp,
 } from "drizzle-orm/pg-core";
 
+// ---------- Users and sign-in ----------
+
+/** People who can sign in. Created with `npm run invite`; passwords are scrypt hashes, never plain text. */
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(), // stored lower-case
+  email: text("email").notNull(),
+  role: text("role").notNull(), // planner | procurement | viewer
+  passwordHash: text("password_hash").notNull(),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+});
+
+/** Failed sign-ins per username, for the 5-attempts / 15-minute lockout. */
+export const loginAttempts = pgTable("login_attempts", {
+  username: text("username").primaryKey(), // lower-case; also tracks names that don't exist
+  failedCount: integer("failed_count").notNull().default(0),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  lastFailedAt: timestamp("last_failed_at", { withTimezone: true }),
+});
+
 // ---------- Source data (loaded from CSV) ----------
 
 export const distributors = pgTable("distributors", {
@@ -80,6 +102,7 @@ export const uploads = pgTable("uploads", {
   fileName: text("file_name").notNull(),
   rowCount: integer("row_count").notNull(),
   uploadedBy: text("uploaded_by").notNull(),
+  userId: integer("user_id").references(() => users.id),
   uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -100,6 +123,7 @@ export const settingsLog = pgTable("settings_log", {
   oldValue: text("old_value"),
   newValue: text("new_value").notNull(),
   changedBy: text("changed_by").notNull(),
+  userId: integer("user_id").references(() => users.id),
   note: text("note"),
   changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -111,6 +135,7 @@ export const runs = pgTable("runs", {
   nowWeek: text("now_week").notNull(),
   thresholds: jsonb("thresholds").notNull(),
   triggeredBy: text("triggered_by").notNull(),
+  userId: integer("user_id").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -135,6 +160,7 @@ export const recommendations = pgTable(
     status: text("status").notNull().default("PENDING"), // PENDING | APPROVED | EDITED | REJECTED | NO_ACTION
     finalQuantity: integer("final_quantity"),
     reviewedBy: text("reviewed_by"),
+    reviewedByUserId: integer("reviewed_by_user_id").references(() => users.id),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     reviewNote: text("review_note"),
   },
@@ -163,6 +189,7 @@ export const reviewAudit = pgTable("review_audit", {
   skuId: text("sku_id").notNull(),
   decision: text("decision").notNull(), // APPROVED | EDITED | REJECTED
   reviewer: text("reviewer").notNull(),
+  userId: integer("user_id").references(() => users.id),
   originalAction: text("original_action").notNull(),
   originalQuantity: integer("original_quantity"),
   finalQuantity: integer("final_quantity"),

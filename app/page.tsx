@@ -7,6 +7,8 @@ import { GenerateExplanationsForm, RecalculateForm } from "@/components/forms";
 import { AlertIcon, BoxIcon, ClockIcon, SparkIcon, TrendUpIcon, TruckIcon, UploadIcon } from "@/components/icons";
 import { geminiConfigured } from "@/lib/ai/gemini";
 import { getDb, schema, type Db } from "@/lib/db";
+import { can } from "@/lib/permissions";
+import { requirePage } from "@/lib/session";
 import { fmt1, fmtDateTime, fmtInt } from "@/lib/format";
 import { getLatestRun, getRunRecommendations } from "@/lib/run-engine";
 import { FLAG_LABELS, type Flag, type Thresholds } from "@/lib/rules/engine";
@@ -59,8 +61,22 @@ const URGENT_FLAGS: { flag: Flag; always: boolean }[] = [
   { flag: "HIGH_DEMAND", always: false },
 ];
 
-export default async function Dashboard({ searchParams }: { searchParams: Promise<{ flag?: string }> }) {
-  const { flag } = await searchParams;
+export default async function Dashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ flag?: string; denied?: string }>;
+}) {
+  const user = await requirePage("viewDashboard");
+  const { flag, denied } = await searchParams;
+  const canRecalc = can(user.role, "recalculate");
+  const canAi = can(user.role, "generateAi");
+  const canSku = can(user.role, "viewSku");
+  const canReview = can(user.role, "viewReview");
+  const deniedNote = denied && (
+    <div className="status status-error" role="status" style={{ marginBottom: 16 }}>
+      That page isn't available for your role, so you've been brought to the dashboard.
+    </div>
+  );
   const db = await getDb();
   const run = await getLatestRun(db);
 
@@ -83,7 +99,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
             then recalculate.
           </p>
           <div className="toolbar" style={{ justifyContent: "center" }}>
-            <RecalculateForm />
+            {canRecalc ? <RecalculateForm /> : <span className="muted">A planner needs to load data first.</span>}
           </div>
         </div>
       </>
@@ -125,11 +141,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   }));
 
   const kpis = [
-    { label: "Awaiting review", value: pending, note: "decisions to make", tone: "tone-accent", Icon: ClockIcon, href: "/review" },
+    { label: "Awaiting review", value: pending, note: "decisions to make", tone: "tone-accent", Icon: ClockIcon, href: canReview ? "/review" : "/?flag=ACTION" },
     { label: "Exceptions", value: counts.get("EXCEPTION") ?? 0, note: "need a planner's judgement", tone: "tone-exception", Icon: AlertIcon, href: "/?flag=EXCEPTION" },
     { label: "Stockout risk", value: counts.get("STOCKOUT") ?? 0, note: "cover below threshold", tone: "tone-stockout", Icon: TrendUpIcon, href: "/?flag=STOCKOUT" },
     { label: "Overstock risk", value: counts.get("OVERSTOCK") ?? 0, note: "pause the next order", tone: "tone-overstock", Icon: BoxIcon, href: "/?flag=OVERSTOCK" },
-    { label: "Units to order", value: unitsToOrder, note: "before review", tone: "tone-ok", Icon: TruckIcon, href: "/review" },
+    { label: "Units to order", value: unitsToOrder, note: "before review", tone: "tone-ok", Icon: TruckIcon, href: canReview ? "/review" : "/?flag=ACTION" },
   ];
 
   const chip = (key: string, label: string, n: number) => (
@@ -165,12 +181,15 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
             )}
           </div>
         </div>
-        <div className="toolbar">
-          <GenerateExplanationsForm enabled={geminiConfigured()} />
-          <RecalculateForm />
-        </div>
+        {(canAi || canRecalc) && (
+          <div className="toolbar">
+            {canAi && <GenerateExplanationsForm enabled={geminiConfigured()} />}
+            {canRecalc && <RecalculateForm />}
+          </div>
+        )}
       </div>
 
+      {deniedNote}
       <div className="kpis">
         {kpis.map(({ label, value, note, tone, Icon, href }) => (
           <Link key={label} href={href} className="kpi">
@@ -220,7 +239,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
               </div>
             </div>
           </div>
-          <StockHealth rows={health} highDemandPct={t.highDemandPct} />
+          <StockHealth rows={health} highDemandPct={t.highDemandPct} linkToSku={canSku} />
         </div>
       </div>
 
@@ -280,9 +299,13 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 return (
                   <tr key={rec.id}>
                     <td>
-                      <Link href={`/sku/${rec.skuId}`} className="product-name">
-                        {sku?.name ?? rec.skuId}
-                      </Link>
+                      {canSku ? (
+                        <Link href={`/sku/${rec.skuId}`} className="product-name">
+                          {sku?.name ?? rec.skuId}
+                        </Link>
+                      ) : (
+                        <span className="product-name">{sku?.name ?? rec.skuId}</span>
+                      )}
                       <div className="product-meta">
                         {rec.skuId}
                         {e.perishability === "High" && (

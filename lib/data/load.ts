@@ -153,11 +153,18 @@ export async function replaceOpenPurchaseOrders(db: Db, lines: PurchaseOrderLine
 }
 
 /** Parses and, if the whole file is valid, saves it. Nothing is saved when any row fails. */
-export async function importCsv(db: Db, dataset: DatasetName, csv: string, fileName: string, uploadedBy: string) {
+export async function importCsv(
+  db: Db,
+  dataset: DatasetName,
+  csv: string,
+  fileName: string,
+  uploadedBy: string,
+  userId: number | null = null,
+) {
   const { rows, errors } = parseDataset(dataset, csv);
   if (errors.length > 0) return { ok: false as const, errors, rowCount: 0 };
   if (rows.length === 0) return { ok: false as const, errors: ["The file has no data rows."], rowCount: 0 };
   await saveDataset(db, dataset, rows);
-  await db.insert(schema.uploads).values({ dataset, fileName, rowCount: rows.length, uploadedBy });
+  await db.insert(schema.uploads).values({ dataset, fileName, rowCount: rows.length, uploadedBy, userId });
   return { ok: true as const, errors: [], rowCount: rows.length };
 }

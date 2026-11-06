@@ -234,6 +234,58 @@ code {
 
 .side-foot {
   margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.side-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--text);
+  min-width: 0;
+}
+
+.side-user:hover,
+.side-user.active {
+  background: var(--surface-2);
+  text-decoration: none;
+}
+
+.side-user .avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  font-size: 12px;
+  font-weight: 650;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.side-user-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.side-user-name {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-user-role {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .signout-btn {
@@ -1915,6 +1967,16 @@ a:focus-visible {
 
   .side-foot {
     margin: 0 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .side-user-text {
+    display: none;
+  }
+
+  .side-user {
+    padding: 4px;
   }
 
   .sidebar {

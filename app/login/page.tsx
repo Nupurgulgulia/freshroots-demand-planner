@@ -11,10 +11,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </span>
         <h1>Welcome back</h1>
         <p className="muted" style={{ margin: "0 0 22px" }}>
-          Sign in to the Freshroots demand planner with your team password.
+          Sign in to the Freshroots demand planner with your own username and password.
         </p>
         <LoginForm next={next ?? "/"} />
-        <div className="login-foot">Freshroots · Demand planning</div>
+        <div className="login-foot">No account? Ask your planner admin to invite you.</div>
       </div>
     </div>
   );

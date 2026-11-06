@@ -9,7 +9,9 @@ import { geminiConfigured } from "@/lib/ai/gemini";
 import { getDb, schema } from "@/lib/db";
 import { fmt1, fmtCover, fmtDateTime, fmtInt, fmtPct } from "@/lib/format";
 import { getAuditForSku } from "@/lib/review";
+import { can } from "@/lib/permissions";
 import { getLatestRun } from "@/lib/run-engine";
+import { requirePage } from "@/lib/session";
 import { RULE_LABELS, type Evaluation, type RuleId, type Thresholds } from "@/lib/rules/engine";
 import { isOpenPoStatus } from "@/lib/rules/inputs";
 import { weeksEndingAt } from "@/lib/rules/weeks";
@@ -19,6 +21,9 @@ export const dynamic = "force-dynamic";
 const CHART_WEEKS = 16;
 
 export default async function SkuPage({ params }: { params: Promise<{ skuId: string }> }) {
+  const user = await requirePage("viewSku");
+  const canDecide = can(user.role, "review");
+  const canAi = can(user.role, "generateAi");
   const { skuId } = await params;
   const db = await getDb();
   const run = await getLatestRun(db);
@@ -282,7 +287,9 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
               </span>{" "}
               AI explanation
             </h2>
-            {rec.action !== "NONE" && <RegenerateForm recommendationId={rec.id} enabled={geminiConfigured()} />}
+            {rec.action !== "NONE" && canAi && (
+              <RegenerateForm recommendationId={rec.id} enabled={geminiConfigured()} />
+            )}
           </div>
           {rec.action === "NONE" ? (
             <p className="muted">No action recommended, so no explanation is generated.</p>
@@ -307,7 +314,7 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
         </div>
 
         <div className="card stack">
-          <h2>Your decision</h2>
+          <h2>{canDecide ? "Your decision" : "Decision"}</h2>
           {rec.action === "NONE" ? (
             <p className="muted">Nothing to review.</p>
           ) : (
@@ -318,7 +325,11 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
                   {fmtInt(rec.finalQuantity)}. You can record a new decision below.
                 </p>
               )}
-              <ReviewForm recommendationId={rec.id} quantity={rec.quantity} action={rec.action} askName />
+              {canDecide ? (
+                <ReviewForm recommendationId={rec.id} quantity={rec.quantity} action={rec.action} />
+              ) : (
+                rec.status === "PENDING" && <p className="muted">Waiting for a planner's decision.</p>
+              )}
             </>
           )}
         </div>

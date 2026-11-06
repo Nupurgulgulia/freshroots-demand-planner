@@ -10,6 +10,8 @@ export interface ReviewInput {
   recommendationId: number;
   decision: Decision;
   reviewer: string;
+  /** The signed-in user who made the decision. */
+  userId?: number | null;
   quantity?: number | null;
   note?: string | null;
 }
@@ -18,7 +20,7 @@ const STATUS: Record<Decision, string> = { APPROVE: "APPROVED", EDIT: "EDITED", 
 
 /** Returns an error message, or null if the input is acceptable. */
 export function validateReview(input: ReviewInput): string | null {
-  if (!input.reviewer?.trim()) return "Enter your name.";
+  if (!input.reviewer?.trim()) return "Sign in to record a decision.";
   if (input.decision === "EDIT") {
     const q = input.quantity;
     if (q == null || !Number.isInteger(q) || q < 0) return "Enter a whole-number quantity of 0 or more.";
@@ -47,7 +49,14 @@ export async function reviewRecommendation(db: Db, input: ReviewInput) {
   await db.transaction(async (tx) => {
     await tx
       .update(schema.recommendations)
-      .set({ status, finalQuantity, reviewedBy: reviewer, reviewedAt: new Date(), reviewNote: note })
+      .set({
+        status,
+        finalQuantity,
+        reviewedBy: reviewer,
+        reviewedByUserId: input.userId ?? null,
+        reviewedAt: new Date(),
+        reviewNote: note,
+      })
       .where(eq(schema.recommendations.id, rec.id));
     await tx.insert(schema.reviewAudit).values({
       recommendationId: rec.id,
@@ -55,6 +64,7 @@ export async function reviewRecommendation(db: Db, input: ReviewInput) {
       skuId: rec.skuId,
       decision: status,
       reviewer,
+      userId: input.userId ?? null,
       originalAction: rec.action,
       originalQuantity: rec.quantity,
       finalQuantity,

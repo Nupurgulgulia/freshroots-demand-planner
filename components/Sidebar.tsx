@@ -12,6 +12,7 @@ import {
   TruckIcon,
   UploadIcon,
 } from "@/components/icons";
+import { ROLE_LABELS, canOpen, type Role } from "@/lib/permissions";
 
 const NAV = [
   { href: "/", label: "Dashboard", Icon: DashboardIcon },
@@ -21,7 +22,7 @@ const NAV = [
   { href: "/settings", label: "Settings", Icon: SettingsIcon },
 ];
 
-export function Sidebar({ pendingCount, showSignOut }: { pendingCount: number; showSignOut: boolean }) {
+export function Sidebar({ pendingCount, user }: { pendingCount: number; user: { username: string; role: Role } }) {
   const pathname = usePathname();
   // The sign-in page gets the whole screen.
   if (pathname === "/login") return null;
@@ -41,7 +42,7 @@ export function Sidebar({ pendingCount, showSignOut }: { pendingCount: number; s
         </span>
       </Link>
       <nav className="side-nav" aria-label="Main">
-        {NAV.map(({ href, label, Icon }) => (
+        {NAV.filter((n) => canOpen(user.role, n.href)).map(({ href, label, Icon }) => (
           <Link key={href} href={href} className={`side-link ${isActive(href) ? "active" : ""}`}>
             <Icon />
             <span>{label}</span>
@@ -49,14 +50,27 @@ export function Sidebar({ pendingCount, showSignOut }: { pendingCount: number; s
           </Link>
         ))}
       </nav>
-      {showSignOut && (
-        <form action={logoutAction} className="side-foot">
-          <button type="submit" className="side-link signout-btn">
+      <div className="side-foot">
+        <Link
+          href="/account"
+          className={`side-user ${pathname === "/account" ? "active" : ""}`}
+          title="Your account and password"
+        >
+          <span className="avatar" aria-hidden="true">
+            {user.username.slice(0, 2).toUpperCase()}
+          </span>
+          <span className="side-user-text">
+            <span className="side-user-name">{user.username}</span>
+            <span className="side-user-role">{ROLE_LABELS[user.role]}</span>
+          </span>
+        </Link>
+        <form action={logoutAction}>
+          <button type="submit" className="side-link signout-btn" aria-label="Sign out">
             <LogoutIcon />
             <span>Sign out</span>
           </button>
         </form>
-      )}
+      </div>
     </aside>
   );
 }

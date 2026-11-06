@@ -1,37 +1,38 @@
 "use server";
 
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import {
-  SESSION_COOKIE,
-  SESSION_MAX_AGE_SECONDS,
-  appPassword,
-  isCorrectPassword,
-  safeNextPath,
-  sessionToken,
-} from "@/lib/auth";
+import { AuthError } from "next-auth";
+import { signIn, signOut } from "@/auth";
+import { normalizeUsername, safeNextPath } from "@/lib/auth";
+import { getDb } from "@/lib/db";
+import { getLockStatus } from "@/lib/users";
+
+const lockedMessage = (minutes: number) =>
+  `Too many failed attempts. This account is locked for ${minutes} more minute${minutes === 1 ? "" : "s"}.`;
 
 export async function loginAction(_prev: { error?: string }, fd: FormData): Promise<{ error?: string }> {
-  const password = appPassword();
+  const username = normalizeUsername(String(fd.get("username") ?? ""));
+  const password = String(fd.get("password") ?? "");
   const next = safeNextPath(String(fd.get("next") ?? "/"));
-  if (!password) redirect(next);
+  if (!username || !password) return { error: "Enter your username and password." };
 
-  if (!isCorrectPassword(String(fd.get("password") ?? ""), password)) {
-    // Slow down guessing.
-    await new Promise((r) => setTimeout(r, 800));
-    return { error: "Wrong password." };
+  const db = await getDb();
+  const before = await getLockStatus(db, username);
+  if (before.locked) return { error: lockedMessage(before.minutesLeft) };
+
+  try {
+    // On success this throws Next's redirect, which must not be caught.
+    await signIn("credentials", { username, password, redirectTo: next });
+    return {};
+  } catch (err) {
+    if (!(err instanceof AuthError)) throw err;
+    const after = await getLockStatus(db, username);
+    if (after.locked) return { error: lockedMessage(after.minutesLeft) };
+    // Slow down guessing a little.
+    await new Promise((r) => setTimeout(r, 600));
+    return { error: "Wrong username or password." };
   }
-  (await cookies()).set(SESSION_COOKIE, sessionToken(password), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_MAX_AGE_SECONDS,
-  });
-  redirect(next);
 }
 
 export async function logoutAction() {
-  (await cookies()).delete(SESSION_COOKIE);
-  redirect("/login");
+  await signOut({ redirectTo: "/login" });
 }

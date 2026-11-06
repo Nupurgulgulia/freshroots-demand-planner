@@ -6,7 +6,13 @@ import { schema } from "@/lib/db";
 import type { Thresholds } from "@/lib/rules/engine";
 import { THRESHOLD_DEFS, getThresholds, validateThresholds } from "@/lib/settings";
 
-export async function updateThresholds(db: Db, next: Thresholds, changedBy: string, note: string | null) {
+export async function updateThresholds(
+  db: Db,
+  next: Thresholds,
+  changedBy: string,
+  note: string | null,
+  userId: number | null = null,
+) {
   if (!changedBy.trim()) return { ok: false as const, errors: ["Enter your name."] };
   const errors = validateThresholds(next);
   if (errors.length) return { ok: false as const, errors };
@@ -27,6 +33,7 @@ export async function updateThresholds(db: Db, next: Thresholds, changedBy: stri
         oldValue: String(current[d.key]),
         newValue: String(next[d.key]),
         changedBy: changedBy.trim(),
+        userId,
         note,
       });
     }
@@ -34,7 +41,13 @@ export async function updateThresholds(db: Db, next: Thresholds, changedBy: stri
   return { ok: true as const, changed: changed.length };
 }
 
-export async function setFestivalMonth(db: Db, yearMonth: string, isFestival: boolean, changedBy: string) {
+export async function setFestivalMonth(
+  db: Db,
+  yearMonth: string,
+  isFestival: boolean,
+  changedBy: string,
+  userId: number | null = null,
+) {
   if (!changedBy.trim()) return { ok: false as const, error: "Enter your name." };
   const m = /^(\d{4})-(\d{2})$/.exec(yearMonth);
   if (!m || Number(m[2]) < 1 || Number(m[2]) > 12) return { ok: false as const, error: "Month must be YYYY-MM." };
@@ -56,6 +69,7 @@ export async function setFestivalMonth(db: Db, yearMonth: string, isFestival: bo
       oldValue: existing ? String(existing.isFestivalMonth) : null,
       newValue: String(isFestival),
       changedBy: changedBy.trim(),
+      userId,
     });
   });
   return { ok: true as const };

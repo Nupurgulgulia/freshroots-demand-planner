@@ -4,12 +4,14 @@ import { getDb, schema } from "@/lib/db";
 import { fmtDateTime } from "@/lib/format";
 import { THRESHOLD_DEFS, formatThreshold, getThresholds, toDisplay } from "@/lib/settings";
 import { getSettingsLog } from "@/lib/settings-update";
+import { requirePage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export default async function SettingsPage() {
+  await requirePage("editSettings");
   const db = await getDb();
   const [thresholds, calendar, log] = await Promise.all([
     getThresholds(db),
@@ -77,7 +79,7 @@ export default async function SettingsPage() {
               </tbody>
             </table>
           </div>
-          <p className="muted small">Toggling uses the name entered in the forms on this page.</p>
+          <p className="muted small">Every change is logged against your account.</p>
         </div>
       </div>
 

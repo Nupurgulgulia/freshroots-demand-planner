@@ -4,11 +4,13 @@ import { DATASET_NAMES, OPTIONAL_DATASETS, datasetColumns } from "@/lib/data/csv
 import { getDb, schema } from "@/lib/db";
 import { fmtDateTime, fmtInt } from "@/lib/format";
 import { isOpenPoStatus } from "@/lib/rules/inputs";
+import { requirePage } from "@/lib/session";
 import { zohoConfigured } from "@/lib/zoho/inventory";
 
 export const dynamic = "force-dynamic";
 
 export default async function UploadPage() {
+  await requirePage("upload");
   const db = await getDb();
   const [uploads, pos] = await Promise.all([
     db.select().from(schema.uploads).orderBy(desc(schema.uploads.id)).limit(20),

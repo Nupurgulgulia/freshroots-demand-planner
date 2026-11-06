@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import {
   festivalMonthAction,
   generateExplanationsAction,
@@ -10,78 +10,10 @@ import {
   saveThresholdsAction,
   syncZohoAction,
   uploadAction,
+  changePasswordAction,
   type ActionState,
 } from "@/app/actions";
 import { CheckIcon, EditIcon, RefreshIcon, SparkIcon, UploadIcon, XIcon } from "@/components/icons";
-
-const NAME_KEY = "freshroots.reviewer";
-const NAME_EVENT = "freshroots:reviewer";
-
-/** The reviewer's name, remembered in this browser only (no login yet) and shared by every form on the page. */
-function useReviewerName(): [string, (v: string) => void] {
-  const [name, setName] = useState("");
-  useEffect(() => {
-    try {
-      setName(localStorage.getItem(NAME_KEY) ?? "");
-    } catch {}
-    const onChange = (e: Event) => setName((e as CustomEvent<string>).detail);
-    window.addEventListener(NAME_EVENT, onChange);
-    return () => window.removeEventListener(NAME_EVENT, onChange);
-  }, []);
-  const update = (v: string) => {
-    try {
-      localStorage.setItem(NAME_KEY, v);
-    } catch {}
-    window.dispatchEvent(new CustomEvent(NAME_EVENT, { detail: v }));
-  };
-  return [name, update];
-}
-
-function NameInput({ required = true }: { required?: boolean }) {
-  const [name, setName] = useReviewerName();
-  return (
-    <input
-      name="name"
-      placeholder="Your name"
-      value={name}
-      onChange={(e) => setName(e.target.value)}
-      required={required}
-      className="name-input"
-      aria-label="Your name"
-    />
-  );
-}
-
-const initials = (name: string) =>
-  name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("");
-
-/** "Reviewing as …" bar: the name is entered once and used by every decision on the page. */
-export function ReviewerBar() {
-  const [name, setName] = useReviewerName();
-  return (
-    <div className="reviewer-bar">
-      <span className="avatar" aria-hidden="true">
-        {initials(name) || "?"}
-      </span>
-      <label htmlFor="reviewer-name" className="muted">
-        Reviewing as
-      </label>
-      <input
-        id="reviewer-name"
-        placeholder="Your name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="name-input"
-      />
-      <span className="muted small">Saved in this browser and recorded with every decision.</span>
-    </div>
-  );
-}
 
 function Status({ state }: { state: ActionState }) {
   if (!state.message && !state.errors?.length) return null;
@@ -101,10 +33,8 @@ function Status({ state }: { state: ActionState }) {
 
 export function RecalculateForm() {
   const [state, action, pending] = useActionState(recalculateAction, {});
-  const [name] = useReviewerName();
   return (
     <form action={action} className="inline-form">
-      <input type="hidden" name="name" value={name} />
       <button type="submit" disabled={pending}>
         <RefreshIcon size={16} />
         {pending ? "Recalculating…" : "Recalculate"}
@@ -150,56 +80,25 @@ export function RegenerateForm({ recommendationId, enabled }: { recommendationId
   );
 }
 
-/**
- * Approve / Edit / Reject. Approve saves at once; Edit and Reject open a short form first.
- * With `askName`, the reviewer name is typed here; otherwise it comes from the ReviewerBar.
- */
+/** Approve / Edit / Reject. Approve saves at once; Edit and Reject open a short form first. The reviewer is the signed-in user. */
 export function ReviewForm({
   recommendationId,
   quantity,
   action: recommendedAction,
   compact = false,
-  askName = false,
 }: {
   recommendationId: number;
   quantity: number | null;
   action: string;
   compact?: boolean;
-  askName?: boolean;
 }) {
   const [state, action, pending] = useActionState(reviewAction, {});
-  const [reviewer, setReviewer] = useReviewerName();
   const [mode, setMode] = useState<"EDIT" | "REJECT" | null>(null);
-  const [nameError, setNameError] = useState(false);
   const isReorder = recommendedAction === "REORDER" && quantity != null;
 
   return (
-    <form
-      action={action}
-      className={compact ? "review-form compact" : "review-form"}
-      onSubmit={(e) => {
-        if (!reviewer.trim()) {
-          e.preventDefault();
-          setNameError(true);
-        }
-      }}
-    >
+    <form action={action} className={compact ? "review-form compact" : "review-form"}>
       <input type="hidden" name="recommendationId" value={recommendationId} />
-      {askName ? (
-        <input
-          name="reviewer"
-          placeholder="Your name"
-          value={reviewer}
-          onChange={(e) => {
-            setReviewer(e.target.value);
-            setNameError(false);
-          }}
-          aria-label="Reviewer name"
-          className="name-input"
-        />
-      ) : (
-        <input type="hidden" name="reviewer" value={reviewer} />
-      )}
 
       {mode === null ? (
         <>
@@ -253,11 +152,6 @@ export function ReviewForm({
           </div>
         </>
       )}
-      {nameError && !reviewer.trim() && (
-        <div className="status status-error">
-          {askName ? "Enter your name first." : "Enter your name in the “Reviewing as” box first."}
-        </div>
-      )}
       <Status state={state} />
     </form>
   );
@@ -298,7 +192,6 @@ export function ThresholdsForm({
         </tbody>
       </table>
       <div className="row">
-        <NameInput />
         <input name="note" placeholder="Why the change? (optional)" className="note-input" />
         <button type="submit" disabled={pending}>
           {pending ? "Saving…" : "Save thresholds"}
@@ -311,12 +204,10 @@ export function ThresholdsForm({
 
 export function FestivalToggle({ yearMonth, isFestival }: { yearMonth: string; isFestival: boolean }) {
   const [state, action, pending] = useActionState(festivalMonthAction, {});
-  const [name] = useReviewerName();
   return (
     <form action={action} className="inline-form">
       <input type="hidden" name="yearMonth" value={yearMonth} />
       <input type="hidden" name="isFestival" value={isFestival ? "0" : "1"} />
-      <input type="hidden" name="name" value={name} />
       <button type="submit" disabled={pending} className="link-button">
         {isFestival ? "Unmark" : "Mark as festival"}
       </button>
@@ -334,7 +225,6 @@ export function AddFestivalMonthForm() {
         <option value="1">Festival month</option>
         <option value="0">Not a festival month</option>
       </select>
-      <NameInput />
       <button type="submit" disabled={pending}>
         Save month
       </button>
@@ -348,7 +238,6 @@ export function ZohoSyncForm({ configured }: { configured: boolean }) {
   return (
     <form action={action} className="stack">
       <div className="row">
-        <NameInput />
         <label className="check">
           <input type="checkbox" name="rerun" value="1" defaultChecked /> Recalculate after syncing
         </label>
@@ -405,7 +294,6 @@ export function UploadForm({ datasets }: { datasets: string[] }) {
             </option>
           ))}
         </select>
-        <NameInput />
         <label className="check">
           <input type="checkbox" name="rerun" value="1" defaultChecked /> Recalculate after loading
         </label>
@@ -414,6 +302,21 @@ export function UploadForm({ datasets }: { datasets: string[] }) {
           {pending ? "Uploading…" : "Upload"}
         </button>
       </div>
+      <Status state={state} />
+    </form>
+  );
+}
+
+export function ChangePasswordForm() {
+  const [state, action, pending] = useActionState(changePasswordAction, {});
+  return (
+    <form action={action} className="stack" style={{ maxWidth: 380 }}>
+      <input type="password" name="current" placeholder="Current password" autoComplete="current-password" required aria-label="Current password" />
+      <input type="password" name="next" placeholder="New password (at least 10 characters)" autoComplete="new-password" minLength={10} required aria-label="New password" />
+      <input type="password" name="confirm" placeholder="New password again" autoComplete="new-password" minLength={10} required aria-label="Confirm new password" />
+      <button type="submit" disabled={pending} style={{ justifySelf: "start" }}>
+        {pending ? "Saving…" : "Change password"}
+      </button>
       <Status state={state} />
     </form>
   );

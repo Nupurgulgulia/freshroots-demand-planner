@@ -2,10 +2,13 @@ import Papa from "papaparse";
 import { getDb } from "@/lib/db";
 import { getApprovedOrders } from "@/lib/review";
 import { getLatestRun } from "@/lib/run-engine";
+import { requireAction } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const { user, error } = await requireAction("exportOrders");
+  if (!user) return new Response(error, { status: 403 });
   const db = await getDb();
   const run = await getLatestRun(db);
   const orders = run ? await getApprovedOrders(db, run.id) : [];

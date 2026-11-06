@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { ActionText, CoverBar, FlagBadge, StatusBadge } from "@/components/badges";
-import { ReviewForm, ReviewerBar } from "@/components/forms";
+import { ReviewForm } from "@/components/forms";
 import { CheckIcon, SparkIcon } from "@/components/icons";
 import { getDb } from "@/lib/db";
 import { fmtInt } from "@/lib/format";
+import { ROLE_LABELS, can } from "@/lib/permissions";
 import { getLatestRun, getRunRecommendations } from "@/lib/run-engine";
+import { requirePage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReviewPage() {
+  const user = await requirePage("viewReview");
+  const canDecide = can(user.role, "review");
   const db = await getDb();
   const run = await getLatestRun(db);
   if (!run) {
@@ -41,7 +45,21 @@ export default async function ReviewPage() {
         </div>
       </div>
 
-      <ReviewerBar />
+      <div className="reviewer-bar">
+        <span className="avatar" aria-hidden="true">
+          {user.username.slice(0, 2).toUpperCase()}
+        </span>
+        {canDecide ? (
+          <span>
+            Reviewing as <strong>{user.username}</strong>. Every decision is recorded against your account.
+          </span>
+        ) : (
+          <span>
+            You're signed in as <strong>{user.username}</strong> ({ROLE_LABELS[user.role]}). This page is read-only
+            for you; planners make the decisions.
+          </span>
+        )}
+      </div>
 
       {pending.length === 0 ? (
         <div className="card empty">
@@ -92,7 +110,11 @@ export default async function ReviewPage() {
                   </ul>
                 )}
               </div>
-              <ReviewForm recommendationId={rec.id} quantity={rec.quantity} action={rec.action} compact />
+              {canDecide ? (
+                <ReviewForm recommendationId={rec.id} quantity={rec.quantity} action={rec.action} compact />
+              ) : (
+                <div className="muted small">Waiting for a planner's decision.</div>
+              )}
             </div>
           ))}
         </div>

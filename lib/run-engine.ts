@@ -7,7 +7,7 @@ import { evaluateAll, type Evaluation } from "@/lib/rules/engine";
 import { buildEngineInputs } from "@/lib/rules/inputs";
 import { getThresholds } from "@/lib/settings";
 
-export async function runEngine(db: Db, triggeredBy: string) {
+export async function runEngine(db: Db, triggeredBy: string, userId: number | null = null) {
   const [skus, distributors, sales, inventory, calendar, openPurchaseOrders, thresholds] = await Promise.all([
     db.select().from(schema.skus).orderBy(schema.skus.skuId),
     db.select().from(schema.distributors),
@@ -31,7 +31,7 @@ export async function runEngine(db: Db, triggeredBy: string) {
   return db.transaction(async (tx) => {
     const [run] = await tx
       .insert(schema.runs)
-      .values({ nowWeek: inputs.nowWeek!, thresholds, triggeredBy })
+      .values({ nowWeek: inputs.nowWeek!, thresholds, triggeredBy, userId })
       .returning();
     await tx.insert(schema.recommendations).values(
       results.map((e) => ({

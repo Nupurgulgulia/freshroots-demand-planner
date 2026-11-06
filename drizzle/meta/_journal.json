@@ -15,6 +15,13 @@
       "when": 1793912413063,
       "tag": "0001_open_purchase_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793980277461,
+      "tag": "0002_users_and_roles",
+      "breakpoints": true
     }
   ]
 }
