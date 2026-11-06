@@ -6,6 +6,7 @@ import { logoutAction } from "@/app/login/actions";
 import {
   DashboardIcon,
   LeafIcon,
+  LinkIcon,
   LogoutIcon,
   ReviewIcon,
   SettingsIcon,
@@ -22,9 +23,19 @@ const NAV = [
   { href: "/performance", label: "Performance", Icon: TrendUpIcon },
   { href: "/upload", label: "Upload data", Icon: UploadIcon },
   { href: "/settings", label: "Settings", Icon: SettingsIcon },
+  { href: "/zoho", label: "Zoho mapping", Icon: LinkIcon, zohoOnly: true },
 ];
 
-export function Sidebar({ pendingCount, user }: { pendingCount: number; user: { username: string; role: Role } }) {
+export function Sidebar({
+  pendingCount,
+  user,
+  zohoOrdering = false,
+}: {
+  pendingCount: number;
+  user: { username: string; role: Role };
+  /** Show the Zoho mapping page only when ordering through Zoho is switched on. */
+  zohoOrdering?: boolean;
+}) {
   const pathname = usePathname();
   // The sign-in page gets the whole screen.
   if (pathname === "/login") return null;
@@ -44,7 +55,7 @@ export function Sidebar({ pendingCount, user }: { pendingCount: number; user: { 
         </span>
       </Link>
       <nav className="side-nav" aria-label="Main">
-        {NAV.filter((n) => canOpen(user.role, n.href)).map(({ href, label, Icon }) => (
+        {NAV.filter((n) => canOpen(user.role, n.href) && (!n.zohoOnly || zohoOrdering)).map(({ href, label, Icon }) => (
           <Link key={href} href={href} className={`side-link ${isActive(href) ? "active" : ""}`}>
             <Icon />
             <span>{label}</span>

@@ -26,7 +26,8 @@ export type Permission =
   | "viewApproved"
   | "exportOrders"
   | "confirmLargeQty" // Phase 2
-  | "sendToZoho"; // Phase 4
+  | "sendToZoho" // Phase 4
+  | "manageZohoMapping";
 
 const MATRIX: Record<Role, Permission[]> = {
   planner: [
@@ -53,6 +54,7 @@ const MATRIX: Record<Role, Permission[]> = {
     "exportOrders",
     "confirmLargeQty",
     "sendToZoho",
+    "manageZohoMapping",
   ],
   viewer: ["viewDashboard", "viewPerformance"],
 };
@@ -70,6 +72,7 @@ const PAGE_RULES: [prefix: string, permission: Permission][] = [
   ["/upload", "upload"],
   ["/settings", "viewSettings"],
   ["/performance", "viewPerformance"],
+  ["/zoho", "manageZohoMapping"],
 ];
 
 /** null = any signed-in user (dashboard, account page). */

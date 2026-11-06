@@ -10,7 +10,8 @@
     "test": "vitest run",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx scripts/seed.ts",
-    "invite": "tsx scripts/invite.ts"
+    "invite": "tsx scripts/invite.ts",
+    "mock:zoho": "tsx scripts/mock-zoho.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.15",

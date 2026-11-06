@@ -167,6 +167,7 @@ export async function getApprovedOrders(db: Db, runId: number) {
       needsConfirmation: schema.recommendations.needsConfirmation,
       confirmedBy: schema.recommendations.confirmedBy,
       confirmedAt: schema.recommendations.confirmedAt,
+      zohoPurchaseorderNumber: schema.recommendations.zohoPurchaseorderNumber,
     })
     .from(schema.recommendations)
     .leftJoin(schema.skus, eq(schema.skus.skuId, schema.recommendations.skuId))

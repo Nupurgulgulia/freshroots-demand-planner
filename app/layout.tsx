@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { getPendingCount } from "@/lib/run-engine";
 import { currentUser } from "@/lib/session";
+import { zohoOrderingEnabled } from "@/lib/zoho/inventory";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -24,7 +25,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en-IN" className={inter.variable}>
       <body>
         <div className="app">
-          {user && <Sidebar pendingCount={pendingCount} user={{ username: user.username, role: user.role }} />}
+          {user && <Sidebar
+              pendingCount={pendingCount}
+              user={{ username: user.username, role: user.role }}
+              zohoOrdering={zohoOrderingEnabled()}
+            />}
           <main className="container">{children}</main>
         </div>
       </body>

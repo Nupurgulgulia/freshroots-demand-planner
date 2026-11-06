@@ -15,7 +15,8 @@ import { THRESHOLD_DEFS, fromDisplay } from "@/lib/settings";
 import { setFestivalMonth, updateThresholds } from "@/lib/settings-update";
 import { saveQuarterlyFigures } from "@/lib/performance-data";
 import { changePassword } from "@/lib/users";
-import { fetchOpenPurchaseOrders, zohoConfig } from "@/lib/zoho/inventory";
+import { fetchOpenPurchaseOrders, fetchVendorsAndItems, zohoConfig, zohoOrderingEnabled } from "@/lib/zoho/inventory";
+import { parseMappingCsv, saveMappings, sendDraftsToZoho, suggestMappings } from "@/lib/zoho/ordering";
 import { toPurchaseOrderLines } from "@/lib/zoho/purchase-orders";
 
 export interface ActionState {
@@ -258,4 +259,91 @@ export async function changePasswordAction(_prev: ActionState, fd: FormData): Pr
   if (next !== String(fd.get("confirm") ?? "")) return { ok: false, message: "The two new passwords don't match." };
   const result = await changePassword(await getDb(), user.id, String(fd.get("current") ?? ""), next);
   return result.ok ? { ok: true, message: "Password changed." } : { ok: false, message: result.error };
+}
+
+// ---------- Zoho ordering (drafts only) ----------
+
+export async function sendToZohoAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const { user, error } = await requireAction("sendToZoho");
+  if (!user) return { ok: false, message: error };
+  if (!zohoOrderingEnabled()) return { ok: false, message: "Sending to Zoho is switched off (ZOHO_ORDERING_ENABLED)." };
+  const db = await getDb();
+  const runId = Number(fd.get("runId"));
+  const latest = await getLatestRun(db);
+  if (!latest || latest.id !== runId) return { ok: false, message: "A newer run exists. Reload the page and check the orders again." };
+  const distributorId = str(fd, "distributorId");
+  const results = await sendDraftsToZoho(db, runId, user, {
+    distributorIds: distributorId ? [distributorId] : undefined,
+    confirmUnknown: fd.get("checkedZoho") === "1",
+  });
+  revalidateAll();
+  if (results.length === 0) return { ok: false, message: "Nothing to send: no ready lines." };
+  const failed = results.filter((r) => r.outcome === "failed" || r.outcome === "unknown");
+  return {
+    ok: failed.length === 0,
+    message: results.map((r) => `${r.distributorId}: ${r.message}`).join("\n"),
+  };
+}
+
+export async function saveZohoMappingAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const { user, error } = await requireAction("manageZohoMapping");
+  if (!user) return { ok: false, message: error };
+  const rows: { type: "vendor" | "item"; ourId: string; zohoId: string }[] = [];
+  for (const [key, value] of fd.entries()) {
+    const m = /^(vendor|item):(.+)$/.exec(key);
+    if (m && typeof value === "string") rows.push({ type: m[1] as "vendor" | "item", ourId: m[2], zohoId: value.trim() });
+  }
+  await saveMappings(await getDb(), rows, user);
+  revalidateAll();
+  return { ok: true, message: "Mapping saved." };
+}
+
+export async function importZohoMappingAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const { user, error } = await requireAction("manageZohoMapping");
+  if (!user) return { ok: false, message: error };
+  const file = fd.get("file");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, message: "Choose zoho_mapping.csv first." };
+  const db = await getDb();
+  const [distributors, skus] = await Promise.all([
+    db.select({ id: schema.distributors.distributorId }).from(schema.distributors),
+    db.select({ id: schema.skus.skuId }).from(schema.skus),
+  ]);
+  const { rows, errors } = parseMappingCsv(await file.text(), {
+    distributors: new Set(distributors.map((d) => d.id)),
+    skus: new Set(skus.map((s) => s.id)),
+  });
+  if (errors.length) return { ok: false, message: "Nothing saved.", errors: errors.slice(0, 20) };
+  await saveMappings(db, rows, user);
+  revalidateAll();
+  return { ok: true, message: `${rows.length} mapping rows saved.` };
+}
+
+export async function suggestZohoMappingAction(_prev: ActionState, _fd: FormData): Promise<ActionState> {
+  const { user, error } = await requireAction("manageZohoMapping");
+  if (!user) return { ok: false, message: error };
+  const config = zohoConfig();
+  if (!config) return { ok: false, message: "Zoho isn't connected yet (ZOHO_* settings)." };
+  const db = await getDb();
+  try {
+    const [zoho, distributors, skus, vendorMap, itemMap] = await Promise.all([
+      fetchVendorsAndItems(config),
+      db.select({ distributorId: schema.distributors.distributorId, name: schema.distributors.name }).from(schema.distributors),
+      db.select({ skuId: schema.skus.skuId }).from(schema.skus),
+      db.select().from(schema.zohoVendorMap),
+      db.select().from(schema.zohoItemMap),
+    ]);
+    const s = suggestMappings(zoho, { distributors, skus });
+    // Only fill gaps; never overwrite a mapping someone set by hand.
+    const mappedVendors = new Set(vendorMap.map((v) => v.distributorId));
+    const mappedItems = new Set(itemMap.map((i) => i.skuId));
+    const fresh = [...s.vendors.filter((v) => !mappedVendors.has(v.ourId)), ...s.items.filter((i) => !mappedItems.has(i.ourId))];
+    await saveMappings(db, fresh, user);
+    revalidateAll();
+    return {
+      ok: true,
+      message: `Filled ${fresh.length} empty mappings from Zoho (${s.vendors.length} vendor and ${s.items.length} item matches found). Check them before sending.`,
+    };
+  } catch (err) {
+    return { ok: false, message: (err as Error).message };
+  }
 }

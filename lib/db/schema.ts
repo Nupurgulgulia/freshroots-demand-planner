@@ -9,6 +9,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // ---------- Users and sign-in ----------
@@ -200,6 +201,9 @@ export const recommendations = pgTable(
     confirmedBy: text("confirmed_by"),
     confirmedByUserId: integer("confirmed_by_user_id").references(() => users.id),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    // Set when this line went to Zoho on a draft purchase order.
+    zohoPurchaseorderId: text("zoho_purchaseorder_id"),
+    zohoPurchaseorderNumber: text("zoho_purchaseorder_number"),
   },
   (t) => [index("recommendations_run_idx").on(t.runId)],
 );
@@ -240,3 +244,54 @@ export const reviewAudit = pgTable("review_audit", {
   note: text("note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ---------- Zoho ordering (drafts only) ----------
+
+/** Which Zoho vendor each distributor is. */
+export const zohoVendorMap = pgTable("zoho_vendor_map", {
+  distributorId: text("distributor_id").primaryKey(),
+  zohoVendorId: text("zoho_vendor_id").notNull(),
+  zohoVendorName: text("zoho_vendor_name"),
+  updatedBy: text("updated_by").notNull(),
+  userId: integer("user_id").references(() => users.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Which Zoho item each SKU is. */
+export const zohoItemMap = pgTable("zoho_item_map", {
+  skuId: text("sku_id").primaryKey(),
+  zohoItemId: text("zoho_item_id").notNull(),
+  zohoItemName: text("zoho_item_name"),
+  updatedBy: text("updated_by").notNull(),
+  userId: integer("user_id").references(() => users.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * One row per run and distributor: the stable reference (e.g. FR-R35-DIST002) and what happened when
+ * it was sent. The unique key is what stops a second draft PO for the same run and distributor.
+ */
+export const zohoPoSends = pgTable(
+  "zoho_po_sends",
+  {
+    id: serial("id").primaryKey(),
+    runId: integer("run_id")
+      .notNull()
+      .references(() => runs.id),
+    distributorId: text("distributor_id").notNull(),
+    reference: text("reference").notNull().unique(),
+    // sending | sent | failed (Zoho refused; safe to retry) | unknown (no answer; check Zoho first)
+    status: text("status").notNull(),
+    zohoPurchaseorderId: text("zoho_purchaseorder_id"),
+    zohoPurchaseorderNumber: text("zoho_purchaseorder_number"),
+    lineCount: integer("line_count").notNull(),
+    units: integer("units").notNull(),
+    error: text("error"),
+    attempts: integer("attempts").notNull().default(0),
+    sentBy: text("sent_by").notNull(),
+    userId: integer("user_id").references(() => users.id),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("zoho_po_sends_run_distributor_idx").on(t.runId, t.distributorId)],
+);

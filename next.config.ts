@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@electric-sql/pglite"],
   // Migrations are applied on first DB use, so ship them with every function.
   outputFileTracingIncludes: { "/**": ["./drizzle/**/*"] },
+  experimental: {
+    // Local dev only: reusing the previous session's Turbopack cache after a restart left pages stuck in
+    // a reload loop on this machine. Production builds are unaffected.
+    turbopackFileSystemCacheForDev: false,
+  },
 };
 
 export default nextConfig;
