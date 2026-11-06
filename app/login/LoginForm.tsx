@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { PasswordInput } from "@/components/PasswordInput";
 import { loginAction } from "./actions";
 
 export function LoginForm({ next }: { next: string }) {
@@ -18,13 +19,11 @@ export function LoginForm({ next }: { next: string }) {
         autoFocus
         aria-label="Username"
       />
-      <input
-        type="password"
+      <PasswordInput
         name="password"
         placeholder="Password"
         autoComplete="current-password"
-        required
-        aria-label="Password"
+        hint="Passwords are case-sensitive. Use the eye to check what you typed."
       />
       <button type="submit" disabled={pending}>
         {pending ? "Signing in…" : "Sign in"}

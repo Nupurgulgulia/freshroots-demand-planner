@@ -1,11 +1,13 @@
 // Passwords, login lockout and redirect safety. Pure (no database), so it's unit-tested.
 
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { MIN_PASSWORD_LENGTH } from "@/lib/password-rules";
+
+export { MIN_PASSWORD_LENGTH };
 
 // ---------- Passwords (scrypt, Node built-in) ----------
 
 const SCRYPT = { N: 16384, r: 8, p: 1, keyLen: 32 };
-export const MIN_PASSWORD_LENGTH = 10;
 
 /** "scrypt$N$r$p$salt$hash" (base64). The plain password is never stored. */
 export function hashPassword(password: string): string {

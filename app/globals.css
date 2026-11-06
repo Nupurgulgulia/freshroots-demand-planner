@@ -2033,3 +2033,78 @@ a:focus-visible {
   color: var(--high-fg);
   font-weight: 500;
 }
+
+/* ---------- Password field: show/hide and hints ---------- */
+
+.pw-wrap {
+  display: grid;
+  gap: 5px;
+}
+
+.pw-field {
+  position: relative;
+}
+
+.pw-field input {
+  width: 100%;
+  padding-right: 42px;
+}
+
+.pw-field .pw-toggle {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+}
+
+.pw-field .pw-toggle:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.pw-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pw-caps {
+  color: var(--overstock-fg);
+  font-weight: 600;
+}
+
+.pw-ok {
+  color: var(--ok-fg);
+}
+
+.pw-bad {
+  color: var(--stockout-fg);
+}
+
+.login-hint {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 13px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.login-hint strong {
+  color: var(--accent);
+  font-size: 12px;
+}

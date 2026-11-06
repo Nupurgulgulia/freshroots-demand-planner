@@ -107,6 +107,20 @@ export async function setUserActive(db: Db, username: string, active: boolean) {
   return result.length > 0;
 }
 
+/** Diagnostics for `npm run invite -- --check`: never counts as a login attempt. */
+export async function checkCredentials(db: Db, username: string, password: string, now = new Date()) {
+  const user = await findUserByUsername(db, username);
+  const lock = await getLockStatus(db, username, now);
+  if (!user) return { exists: false as const, lock };
+  return {
+    exists: true as const,
+    active: user.active,
+    role: user.role,
+    passwordMatches: password ? verifyPassword(password, user.passwordHash) : null,
+    lock,
+  };
+}
+
 /** Changes only the role; the password, email and lockout state are left alone. */
 export async function setUserRole(db: Db, username: string, role: string) {
   if (!isRole(role)) return { ok: false as const, error: "Role must be planner, procurement or viewer." };

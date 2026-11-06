@@ -3,13 +3,15 @@
 export type InviteCommand =
   | { kind: "upsert"; username: string; role: string; email: string; reset: boolean }
   | { kind: "setActive"; username: string; active: boolean }
-  | { kind: "setRole"; username: string; role: string };
+  | { kind: "setRole"; username: string; role: string }
+  | { kind: "check"; username: string };
 
 export const INVITE_USAGE = `Usage:
   INVITE_PASSWORD='…' npm run invite -- --username raghav --role planner --email raghav@example.com
   INVITE_PASSWORD='…' npm run invite -- --username raghav --role planner --email raghav@example.com --reset
   npm run invite -- --username raghav --role procurement --role-only   (change role, keep password)
   npm run invite -- --username raghav --disable      (or --enable)
+  INVITE_PASSWORD=… npm run invite -- --username raghav --check   (does this password work? no login attempt is counted)
 
 Roles: planner, procurement, viewer. The password is read from the INVITE_PASSWORD environment
 variable, never from the command line, and only its hash is stored.`;
@@ -27,13 +29,14 @@ export function parseInviteArgs(argv: string[]): { command: InviteCommand } | { 
       i++;
     } else flags.set(key, true);
   }
-  const known = new Set(["username", "role", "email", "reset", "disable", "enable", "role-only"]);
+  const known = new Set(["username", "role", "email", "reset", "disable", "enable", "role-only", "check"]);
   for (const k of flags.keys()) if (!known.has(k)) return { error: `Unknown option --${k}.` };
 
   const value = (k: string) => (typeof flags.get(k) === "string" ? (flags.get(k) as string) : "");
   const username = value("username");
   if (!username) return { error: "--username is required." };
 
+  if (flags.has("check")) return { command: { kind: "check", username } };
   if (flags.has("disable") || flags.has("enable")) {
     if (flags.has("disable") && flags.has("enable")) return { error: "Use either --disable or --enable, not both." };
     return { command: { kind: "setActive", username, active: flags.has("enable") } };

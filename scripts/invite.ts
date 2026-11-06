@@ -4,7 +4,7 @@
 import { config } from "dotenv";
 import { closeDb, getDb } from "@/lib/db";
 import { INVITE_USAGE, parseInviteArgs } from "@/lib/invite-args";
-import { setUserActive, setUserRole, upsertUser } from "@/lib/users";
+import { checkCredentials, setUserActive, setUserRole, upsertUser } from "@/lib/users";
 
 config({ path: [".env.local", ".env"], quiet: true });
 
@@ -17,6 +17,28 @@ async function main() {
   const { command } = parsed;
   const db = await getDb();
   console.log(process.env.DATABASE_URL ? "Using Neon (DATABASE_URL)" : "Using local PGlite in ./.pglite");
+
+  if (command.kind === "check") {
+    // Only the host name is printed, never the password in the connection string.
+    if (process.env.DATABASE_URL) {
+      const host = new URL(process.env.DATABASE_URL.replace(/^postgres(ql)?:/, "http:")).hostname;
+      console.log(`Database host: ${host}`);
+    }
+    const r = await checkCredentials(db, command.username, process.env.INVITE_PASSWORD ?? "");
+    await closeDb();
+    if (!r.exists) {
+      console.log(`No user "${command.username}" in this database.`);
+    } else {
+      console.log(`User found. Role: ${r.role}. Active: ${r.active ? "yes" : "no"}.`);
+      console.log(
+        r.passwordMatches == null
+          ? "Set INVITE_PASSWORD to also test a password."
+          : `Password in INVITE_PASSWORD: ${r.passwordMatches ? "MATCHES" : "does NOT match"}.`,
+      );
+    }
+    console.log(r.lock.locked ? `Locked for ${r.lock.minutesLeft} more minute(s).` : "Not locked.");
+    process.exit(0);
+  }
 
   if (command.kind === "setActive") {
     const found = await setUserActive(db, command.username, command.active);

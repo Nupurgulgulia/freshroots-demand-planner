@@ -122,6 +122,10 @@ describe("npm run invite arguments", () => {
     });
   });
 
+  it("parses a credentials check", () => {
+    expect(parseInviteArgs(["--username", "nupur", "--check"])).toEqual({ command: { kind: "check", username: "nupur" } });
+  });
+
   it("parses disable and enable", () => {
     expect(parseInviteArgs(["--username", "deepa", "--disable"])).toEqual({
       command: { kind: "setActive", username: "deepa", active: false },

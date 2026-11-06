@@ -13,6 +13,8 @@ import {
   changePasswordAction,
   type ActionState,
 } from "@/app/actions";
+import { PasswordInput } from "@/components/PasswordInput";
+import { MIN_PASSWORD_LENGTH } from "@/lib/password-rules";
 import { CheckIcon, EditIcon, RefreshIcon, SparkIcon, UploadIcon, XIcon } from "@/components/icons";
 
 function Status({ state }: { state: ActionState }) {
@@ -309,11 +311,38 @@ export function UploadForm({ datasets }: { datasets: string[] }) {
 
 export function ChangePasswordForm() {
   const [state, action, pending] = useActionState(changePasswordAction, {});
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const longEnough = next.length >= MIN_PASSWORD_LENGTH;
+  const matches = confirm.length > 0 && next === confirm;
   return (
     <form action={action} className="stack" style={{ maxWidth: 380 }}>
-      <input type="password" name="current" placeholder="Current password" autoComplete="current-password" required aria-label="Current password" />
-      <input type="password" name="next" placeholder="New password (at least 10 characters)" autoComplete="new-password" minLength={10} required aria-label="New password" />
-      <input type="password" name="confirm" placeholder="New password again" autoComplete="new-password" minLength={10} required aria-label="Confirm new password" />
+      <PasswordInput name="current" placeholder="Current password" autoComplete="current-password" />
+      <PasswordInput
+        name="next"
+        placeholder="New password"
+        autoComplete="new-password"
+        minLength={MIN_PASSWORD_LENGTH}
+        onValueChange={setNext}
+        hint={
+          <span className={next && longEnough ? "pw-ok" : undefined}>
+            {next && longEnough ? "✓ " : ""}At least {MIN_PASSWORD_LENGTH} characters. A few random words with a number
+            is easy to remember and hard to guess.
+          </span>
+        }
+      />
+      <PasswordInput
+        name="confirm"
+        placeholder="New password again"
+        autoComplete="new-password"
+        minLength={MIN_PASSWORD_LENGTH}
+        onValueChange={setConfirm}
+        hint={
+          confirm ? (
+            <span className={matches ? "pw-ok" : "pw-bad"}>{matches ? "✓ Passwords match" : "Passwords don't match yet"}</span>
+          ) : undefined
+        }
+      />
       <button type="submit" disabled={pending} style={{ justifySelf: "start" }}>
         {pending ? "Saving…" : "Change password"}
       </button>
