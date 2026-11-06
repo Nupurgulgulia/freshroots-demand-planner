@@ -28,8 +28,9 @@ export const proxy = auth((request) => {
 });
 
 export const config = {
-  // Everything except the login page, Auth.js's own routes, Next.js internals (assets, and the dev
+  // Everything except the login page, Auth.js's own routes, the cron job (it checks CRON_SECRET itself),
+  // Next.js internals (assets, and the dev
   // server's live-update socket, which breaks into a reload loop if it passes through the sign-in
   // check) and the favicon.
-  matcher: ["/((?!login|api/auth|_next/|favicon.ico).*)"],
+  matcher: ["/((?!login|api/auth|api/cron|_next/|favicon.ico).*)"],
 };

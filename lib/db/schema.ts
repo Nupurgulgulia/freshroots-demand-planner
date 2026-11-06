@@ -295,3 +295,32 @@ export const zohoPoSends = pgTable(
   },
   (t) => [uniqueIndex("zoho_po_sends_run_distributor_idx").on(t.runId, t.distributorId)],
 );
+
+// ---------- Scheduled runs and email ----------
+
+/** Every scheduled (or "run now") job: what it did and why it skipped, if it did. */
+export const jobRuns = pgTable("job_runs", {
+  id: serial("id").primaryKey(),
+  trigger: text("trigger").notNull(), // cron | manual
+  triggeredBy: text("triggered_by").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  // ran | skipped_stale | skipped_day | skipped_already_ran | failed
+  outcome: text("outcome"),
+  runId: integer("run_id").references(() => runs.id),
+  message: text("message"),
+  steps: jsonb("steps").$type<string[]>().notNull().default([]),
+});
+
+/** Every email the app sent, or would have sent when RESEND_API_KEY isn't set ("logged"). */
+export const emailLog = pgTable("email_log", {
+  id: serial("id").primaryKey(),
+  kind: text("kind").notNull(), // run_summary | stale_data | review_reminder
+  recipients: text("recipients").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  status: text("status").notNull(), // sent | logged | failed | no_recipients
+  error: text("error"),
+  jobId: integer("job_id").references(() => jobRuns.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

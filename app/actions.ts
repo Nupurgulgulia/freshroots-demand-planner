@@ -5,7 +5,7 @@ import { getDb, schema } from "@/lib/db";
 import { explainRecommendation, explainRun } from "@/lib/ai/explain";
 import { geminiConfigured } from "@/lib/ai/gemini";
 import { DATASET_NAMES, datasetFromFileName, type DatasetName } from "@/lib/data/csv";
-import { importCsv, replaceOpenPurchaseOrders } from "@/lib/data/load";
+import { importCsv } from "@/lib/data/load";
 import { capReachedMessage, getAiUsage } from "@/lib/ai/usage";
 import { confirmLargeQuantity, reviewRecommendation, type Decision } from "@/lib/review";
 import { getLatestRun, runEngine } from "@/lib/run-engine";
@@ -15,9 +15,10 @@ import { THRESHOLD_DEFS, fromDisplay } from "@/lib/settings";
 import { setFestivalMonth, updateThresholds } from "@/lib/settings-update";
 import { saveQuarterlyFigures } from "@/lib/performance-data";
 import { changePassword } from "@/lib/users";
-import { fetchOpenPurchaseOrders, fetchVendorsAndItems, zohoConfig, zohoOrderingEnabled } from "@/lib/zoho/inventory";
+import { fetchVendorsAndItems, zohoConfig, zohoOrderingEnabled } from "@/lib/zoho/inventory";
+import { syncOpenPosFromZoho } from "@/lib/zoho/sync";
+import { runScheduledJob } from "@/lib/automation/job";
 import { parseMappingCsv, saveMappings, sendDraftsToZoho, suggestMappings } from "@/lib/zoho/ordering";
-import { toPurchaseOrderLines } from "@/lib/zoho/purchase-orders";
 
 export interface ActionState {
   ok?: boolean;
@@ -200,22 +201,10 @@ export async function syncZohoAction(_prev: ActionState, fd: FormData): Promise<
 
   const db = await getDb();
   try {
-    const pos = await fetchOpenPurchaseOrders(config);
-    const { lines, skippedNoSku } = toPurchaseOrderLines(pos);
-    await db.transaction((tx) => replaceOpenPurchaseOrders(tx as unknown as typeof db, lines, "zoho"));
-    await db.insert(schema.uploads).values({
-      dataset: "open_purchase_orders",
-      fileName: "Zoho Inventory sync",
-      rowCount: lines.length,
-      uploadedBy: user.username,
-      userId: user.id,
-    });
-
-    const known = new Set((await db.select({ id: schema.skus.skuId }).from(schema.skus)).map((r) => r.id));
-    const unknown = [...new Set(lines.map((l) => l.skuId).filter((id) => !known.has(id)))];
-    const messages = [`Synced ${pos.length} open purchase orders (${lines.length} lines) from Zoho Inventory.`];
-    if (unknown.length) messages.push(`Not in the SKU master, so ignored: ${unknown.join(", ")}.`);
-    if (skippedNoSku) messages.push(`${skippedNoSku} line(s) had no SKU code in Zoho and were skipped.`);
+    const s = await syncOpenPosFromZoho(db, config, user);
+    const messages = [`Synced ${s.poCount} open purchase orders (${s.lineCount} lines) from Zoho Inventory.`];
+    if (s.unknownSkus.length) messages.push(`Not in the SKU master, so ignored: ${s.unknownSkus.join(", ")}.`);
+    if (s.skippedNoSku) messages.push(`${s.skippedNoSku} line(s) had no SKU code in Zoho and were skipped.`);
 
     if (fd.get("rerun") === "1") {
       const run = await runEngine(db, user.username, user.id);
@@ -346,4 +335,19 @@ export async function suggestZohoMappingAction(_prev: ActionState, _fd: FormData
   } catch (err) {
     return { ok: false, message: (err as Error).message };
   }
+}
+
+/** Runs the scheduled job now (ignores the Mon/Thu rule, still checks data freshness and sends emails). */
+export async function runJobNowAction(_prev: ActionState, _fd: FormData): Promise<ActionState> {
+  const { user, error } = await requireAction("recalculate");
+  if (!user) return { ok: false, message: error };
+  const result = await runScheduledJob(await getDb(), { trigger: "manual", triggeredBy: user.username });
+  revalidateAll();
+  return {
+    ok: result.outcome === "ran",
+    message: [
+      `Job #${result.jobId}: ${result.outcome.replace(/_/g, " ")}. ${result.message}`,
+      ...result.steps.map((st) => `• ${st}`),
+    ].join("\n"),
+  };
 }

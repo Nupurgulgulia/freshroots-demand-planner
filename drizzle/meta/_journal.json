@@ -43,6 +43,13 @@
       "when": 1793989632687,
       "tag": "0005_zoho_ordering",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793990713009,
+      "tag": "0006_automation",
+      "breakpoints": true
     }
   ]
 }

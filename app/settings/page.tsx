@@ -1,5 +1,7 @@
 import { desc } from "drizzle-orm";
-import { AddFestivalMonthForm, FestivalToggle, ThresholdsForm } from "@/components/forms";
+import { AddFestivalMonthForm, FestivalToggle, RunJobNowForm, ThresholdsForm } from "@/components/forms";
+import { getRecentEmails, getRecentJobs } from "@/lib/automation/job";
+import { freshnessLimits } from "@/lib/automation/schedule";
 import { getDb, schema } from "@/lib/db";
 import { fmtDateTime } from "@/lib/format";
 import { THRESHOLD_DEFS, formatThreshold, getThresholds, toDisplay } from "@/lib/settings";
@@ -13,6 +15,10 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 export default async function SettingsPage() {
   await requirePage("editSettings");
   const db = await getDb();
+  const [jobs, emails] = await Promise.all([getRecentJobs(db), getRecentEmails(db)]);
+  const limits = freshnessLimits();
+  const emailOn = Boolean(process.env.RESEND_API_KEY);
+  const cronOn = Boolean(process.env.CRON_SECRET);
   const [thresholds, calendar, log] = await Promise.all([
     getThresholds(db),
     db.select().from(schema.festivalCalendar).orderBy(desc(schema.festivalCalendar.yearMonth)),
@@ -80,6 +86,78 @@ export default async function SettingsPage() {
             </table>
           </div>
           <p className="muted small">Every change is logged against your account.</p>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 20 }}>
+        <div className="card-head">
+          <div>
+            <h2>Automation</h2>
+            <div className="muted small">
+              Runs every day at about 06:00 India time and recalculates on Mondays and Thursdays: syncs open POs from
+              Zoho (if connected), skips if sales lag more than {limits.salesWeeksBehind} week(s) or stock is over{" "}
+              {limits.stockDays} days old, recalculates, writes AI text within the monthly limit, and emails planners.
+              Reviews pending over 2 days get a daily reminder.
+            </div>
+          </div>
+          <span className="row">
+            <span className={`badge no-dot ${cronOn ? "tone-ok" : "tone-overstock"}`}>
+              {cronOn ? "Schedule on" : "Schedule off (no CRON_SECRET)"}
+            </span>
+            <span className={`badge no-dot ${emailOn ? "tone-ok" : "tone-neutral"}`}>
+              {emailOn ? "Email via Resend" : "Email logged only"}
+            </span>
+          </span>
+        </div>
+        <RunJobNowForm />
+        <div className="grid-2" style={{ marginTop: 16 }}>
+          <div>
+            <h3>Recent jobs</h3>
+            {jobs.length === 0 ? (
+              <p className="muted small">None yet.</p>
+            ) : (
+              <ul className="zoho-list">
+                {jobs.map((j) => (
+                  <li key={j.id}>
+                    <div>
+                      <strong>#{j.id}</strong> <span className="product-meta">{fmtDateTime(j.startedAt)} · {j.trigger === "cron" ? "scheduled" : `run now by ${j.triggeredBy}`}</span>
+                      <div className="small">
+                        <span className={`badge no-dot ${j.outcome === "ran" ? "tone-ok" : j.outcome === "failed" ? "tone-stockout" : "tone-neutral"}`}>
+                          {(j.outcome ?? "running").replace(/_/g, " ")}
+                        </span>{" "}
+                        {j.message}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <h3>Recent emails</h3>
+            {emails.length === 0 ? (
+              <p className="muted small">None yet.</p>
+            ) : (
+              <ul className="zoho-list">
+                {emails.map((e) => (
+                  <li key={e.id}>
+                    <div>
+                      <strong>{e.subject}</strong>
+                      <div className="product-meta">
+                        {fmtDateTime(e.createdAt)} · to {e.recipients || "nobody (no matching users)"}
+                      </div>
+                      <div className="small">
+                        <span className={`badge no-dot ${e.status === "sent" ? "tone-ok" : e.status === "failed" ? "tone-stockout" : "tone-neutral"}`}>
+                          {e.status === "logged" ? "logged (no RESEND_API_KEY)" : e.status.replace(/_/g, " ")}
+                        </span>
+                        {e.error ? ` ${e.error}` : ""}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
 

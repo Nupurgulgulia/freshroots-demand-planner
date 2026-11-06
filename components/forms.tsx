@@ -10,6 +10,7 @@ import {
   saveThresholdsAction,
   confirmQuantityAction,
   saveFiguresAction,
+  runJobNowAction,
   syncZohoAction,
   uploadAction,
   changePasswordAction,
@@ -228,6 +229,21 @@ export function FiguresForm({ defaultQuarter }: { defaultQuarter: string }) {
         <input name="note" placeholder="Where these figures come from (optional)" className="note-input" />
         <button type="submit" disabled={pending}>
           {pending ? "Saving…" : "Save figures"}
+        </button>
+      </div>
+      <Status state={state} />
+    </form>
+  );
+}
+
+export function RunJobNowForm() {
+  const [state, action, pending] = useActionState(runJobNowAction, {});
+  return (
+    <form action={action} className="stack">
+      <div>
+        <button type="submit" disabled={pending} className="secondary">
+          <RefreshIcon size={16} />
+          {pending ? "Running…" : "Run the scheduled job now"}
         </button>
       </div>
       <Status state={state} />
