@@ -104,7 +104,7 @@ export default async function UploadPage() {
             <p className="muted">None yet.</p>
           ) : (
             <div className="table-wrap">
-              <table className="table">
+              <table className="table stack-table">
                 <thead>
                   <tr>
                     <th>When</th>
@@ -116,13 +116,13 @@ export default async function UploadPage() {
                 <tbody>
                   {uploads.map((u) => (
                     <tr key={u.id}>
-                      <td className="muted">{fmtDateTime(u.uploadedAt)}</td>
-                      <td>
+                      <td data-label="When" className="muted">{fmtDateTime(u.uploadedAt)}</td>
+                      <td data-label="Dataset">
                         <div style={{ fontWeight: 500 }}>{u.dataset}</div>
                         <div className="product-meta">{u.fileName}</div>
                       </td>
-                      <td className="num">{u.rowCount}</td>
-                      <td>{u.uploadedBy}</td>
+                      <td data-label="Rows" className="num">{u.rowCount}</td>
+                      <td data-label="By">{u.uploadedBy}</td>
                     </tr>
                   ))}
                 </tbody>

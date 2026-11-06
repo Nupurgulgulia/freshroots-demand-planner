@@ -163,9 +163,22 @@ export const recommendations = pgTable(
     reviewedByUserId: integer("reviewed_by_user_id").references(() => users.id),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     reviewNote: text("review_note"),
+    // Quantity cap: set when the approved quantity is above maxQtyMultiple × the standard reorder quantity;
+    // the line is not ready to send until procurement confirms it.
+    needsConfirmation: boolean("needs_confirmation").notNull().default(false),
+    confirmedBy: text("confirmed_by"),
+    confirmedByUserId: integer("confirmed_by_user_id").references(() => users.id),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
   },
   (t) => [index("recommendations_run_idx").on(t.runId)],
 );
+
+/** Gemini calls per calendar month (IST), for the AI_MONTHLY_CALL_CAP spend cap. */
+export const aiUsage = pgTable("ai_usage", {
+  month: text("month").primaryKey(), // YYYY-MM
+  calls: integer("calls").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 /** Cached Gemini output per recommendation. */
 export const aiExplanations = pgTable("ai_explanations", {

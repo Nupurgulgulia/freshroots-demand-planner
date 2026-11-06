@@ -56,7 +56,7 @@ export default async function SettingsPage() {
           <h2>Festival calendar</h2>
           <AddFestivalMonthForm />
           <div className="table-wrap">
-            <table className="table">
+            <table className="table stack-table">
               <thead>
                 <tr>
                   <th>Month</th>
@@ -67,10 +67,10 @@ export default async function SettingsPage() {
               <tbody>
                 {calendar.map((c) => (
                   <tr key={c.yearMonth}>
-                    <td>
+                    <td data-label="Month">
                       {MONTHS[c.month - 1]} {c.year}
                     </td>
-                    <td>{c.isFestivalMonth ? <span className="badge flag-OVERSTOCK">Festival</span> : "—"}</td>
+                    <td data-label="Festival?">{c.isFestivalMonth ? <span className="badge flag-OVERSTOCK">Festival</span> : "—"}</td>
                     <td>
                       <FestivalToggle yearMonth={c.yearMonth} isFestival={c.isFestivalMonth} />
                     </td>
@@ -89,7 +89,7 @@ export default async function SettingsPage() {
           <p className="muted">No changes yet.</p>
         ) : (
           <div className="table-wrap">
-            <table className="table">
+            <table className="table stack-table">
               <thead>
                 <tr>
                   <th>When</th>
@@ -103,12 +103,12 @@ export default async function SettingsPage() {
               <tbody>
                 {log.map((l) => (
                   <tr key={l.id}>
-                    <td>{fmtDateTime(l.changedAt)}</td>
-                    <td>{l.changedBy}</td>
-                    <td>{l.area === "calendar" ? `Calendar ${l.key}` : (defsByKey.get(l.key)?.label ?? l.key)}</td>
-                    <td>{describeChange(l.area, l.key, l.oldValue)}</td>
-                    <td>{describeChange(l.area, l.key, l.newValue)}</td>
-                    <td>{l.note}</td>
+                    <td data-label="When">{fmtDateTime(l.changedAt)}</td>
+                    <td data-label="Who">{l.changedBy}</td>
+                    <td data-label="Setting">{l.area === "calendar" ? `Calendar ${l.key}` : (defsByKey.get(l.key)?.label ?? l.key)}</td>
+                    <td data-label="From">{describeChange(l.area, l.key, l.oldValue)}</td>
+                    <td data-label="To">{describeChange(l.area, l.key, l.newValue)}</td>
+                    <td data-label="Note">{l.note}</td>
                   </tr>
                 ))}
               </tbody>

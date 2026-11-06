@@ -22,6 +22,13 @@
       "when": 1793980277461,
       "tag": "0002_users_and_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793986783613,
+      "tag": "0003_guardrails",
+      "breakpoints": true
     }
   ]
 }

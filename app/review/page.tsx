@@ -125,7 +125,7 @@ export default async function ReviewPage() {
         <p className="muted">No decisions yet.</p>
       ) : (
         <div className="table-wrap">
-          <table className="table">
+          <table className="table stack-table">
             <thead>
               <tr>
                 <th>Product</th>
@@ -139,21 +139,21 @@ export default async function ReviewPage() {
             <tbody>
               {decided.map(({ rec, sku }) => (
                 <tr key={rec.id}>
-                  <td>
+                  <td data-label="Product">
                     <Link href={`/sku/${rec.skuId}`} className="product-name">
                       {sku?.name ?? rec.skuId}
                     </Link>
                     <div className="product-meta">{rec.skuId}</div>
                   </td>
-                  <td>
+                  <td data-label="Recommended">
                     <ActionText action={rec.action} quantity={rec.quantity} />
                   </td>
-                  <td>
+                  <td data-label="Decision">
                     <StatusBadge status={rec.status} />
                   </td>
-                  <td className="num">{fmtInt(rec.finalQuantity)}</td>
-                  <td>{rec.reviewedBy}</td>
-                  <td className="muted">{rec.reviewNote}</td>
+                  <td data-label="Final qty" className="num">{fmtInt(rec.finalQuantity)}</td>
+                  <td data-label="By">{rec.reviewedBy}</td>
+                  <td data-label="Note" className="muted">{rec.reviewNote}</td>
                 </tr>
               ))}
             </tbody>

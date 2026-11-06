@@ -6,6 +6,7 @@ import { RegenerateForm, ReviewForm } from "@/components/forms";
 import { ArrowLeftIcon, CheckIcon, SparkIcon, XIcon } from "@/components/icons";
 import { SalesChart } from "@/components/SalesChart";
 import { geminiConfigured } from "@/lib/ai/gemini";
+import { capReachedMessage, getAiUsage } from "@/lib/ai/usage";
 import { getDb, schema } from "@/lib/db";
 import { fmt1, fmtCover, fmtDateTime, fmtInt, fmtPct } from "@/lib/format";
 import { getAuditForSku } from "@/lib/review";
@@ -53,6 +54,9 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
 
   const audit = await getAuditForSku(db, skuId);
   // Current open-PO snapshot for this SKU (the run itself stores only the total it used).
+  const aiUsage = await getAiUsage(db);
+  const asOf = e.asOfDate;
+  const isLate = (p: { expectedDate: string | null }) => asOf != null && p.expectedDate != null && p.expectedDate < asOf;
   const poLines = (
     await db.select().from(schema.openPurchaseOrders).where(eq(schema.openPurchaseOrders.skuId, skuId))
   ).filter((p) => isOpenPoStatus(p.status));
@@ -65,6 +69,7 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
     .limit(6);
 
   const fired = new Set(e.rulesFired);
+  const coverText = fmtCover(e.weeksOfCover, [e.stockoutThresholdWeeks, e.overstockThresholdWeeks]);
   const dataOk = e.action !== "REVIEW";
   const checks: { rule: RuleId; text: string; fired: boolean }[] = [
     {
@@ -77,12 +82,12 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
     {
       rule: "STOCKOUT_RISK",
       fired: fired.has("STOCKOUT_RISK"),
-      text: dataOk ? `Cover ${fmt1(e.weeksOfCover)} < ${e.stockoutThresholdWeeks} weeks?` : "Not evaluated (data problem)",
+      text: dataOk ? `Cover ${coverText} < ${e.stockoutThresholdWeeks} weeks?` : "Not evaluated (data problem)",
     },
     {
       rule: "OVERSTOCK_RISK",
       fired: fired.has("OVERSTOCK_RISK"),
-      text: dataOk ? `Cover ${fmt1(e.weeksOfCover)} > ${e.overstockThresholdWeeks} weeks?` : "Not evaluated (data problem)",
+      text: dataOk ? `Cover ${coverText} > ${e.overstockThresholdWeeks} weeks?` : "Not evaluated (data problem)",
     },
     {
       rule: "HIGH_DEMAND",
@@ -177,7 +182,7 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
             </span>
           </div>
           <div className="table-wrap">
-            <table className="table">
+            <table className="table stack-table">
               <thead>
                 <tr>
                   <th>PO</th>
@@ -191,14 +196,24 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
               <tbody>
                 {poLines.map((p) => (
                   <tr key={p.poNumber}>
-                    <td style={{ fontWeight: 500 }}>{p.poNumber}</td>
-                    <td>
+                    <td data-label="PO" style={{ fontWeight: 500 }}>
+                      {p.poNumber}
+                      {isLate(p) && (
+                        <>
+                          {" "}
+                          <span className="tag late" title={`Expected ${p.expectedDate}, before the stock date ${asOf}`}>
+                            Late
+                          </span>
+                        </>
+                      )}
+                    </td>
+                    <td data-label="Status">
                       <span className="badge no-dot tone-neutral">{p.status}</span>
                     </td>
-                    <td className="muted">{p.expectedDate ?? "—"}</td>
-                    <td className="num">{fmtInt(p.orderedQty)}</td>
-                    <td className="num">{fmtInt(p.receivedQty)}</td>
-                    <td className="num">
+                    <td data-label="Expected" className="muted">{p.expectedDate ?? "—"}</td>
+                    <td data-label="Ordered" className="num">{fmtInt(p.orderedQty)}</td>
+                    <td data-label="Received" className="num">{fmtInt(p.receivedQty)}</td>
+                    <td data-label="Still to come" className="num">
                       <strong>{fmtInt(Math.max(0, p.orderedQty - p.receivedQty))}</strong>
                     </td>
                   </tr>
@@ -288,7 +303,11 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
               AI explanation
             </h2>
             {rec.action !== "NONE" && canAi && (
-              <RegenerateForm recommendationId={rec.id} enabled={geminiConfigured()} />
+              <RegenerateForm
+                recommendationId={rec.id}
+                enabled={geminiConfigured()}
+                capMessage={aiUsage.capReached ? capReachedMessage(aiUsage.cap, aiUsage.resumes) : undefined}
+              />
             )}
           </div>
           {rec.action === "NONE" ? (
@@ -341,7 +360,7 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
           <p className="muted">No decisions yet.</p>
         ) : (
           <div className="table-wrap">
-            <table className="table">
+            <table className="table stack-table">
               <thead>
                 <tr>
                   <th>When</th>
@@ -356,15 +375,15 @@ export default async function SkuPage({ params }: { params: Promise<{ skuId: str
               <tbody>
                 {audit.map((a) => (
                   <tr key={a.id}>
-                    <td>{fmtDateTime(a.createdAt)}</td>
-                    <td>#{a.runId}</td>
-                    <td>{a.reviewer}</td>
-                    <td>
+                    <td data-label="When">{fmtDateTime(a.createdAt)}</td>
+                    <td data-label="Run">#{a.runId}</td>
+                    <td data-label="Who">{a.reviewer}</td>
+                    <td data-label="Decision">
                       <StatusBadge status={a.decision} />
                     </td>
-                    <td className="num">{fmtInt(a.originalQuantity)}</td>
-                    <td className="num">{fmtInt(a.finalQuantity)}</td>
-                    <td>{a.note}</td>
+                    <td data-label="Original qty" className="num">{fmtInt(a.originalQuantity)}</td>
+                    <td data-label="Final qty" className="num">{fmtInt(a.finalQuantity)}</td>
+                    <td data-label="Note">{a.note}</td>
                   </tr>
                 ))}
               </tbody>

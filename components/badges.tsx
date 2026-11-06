@@ -10,6 +10,7 @@ const STATUS_LABELS: Record<string, string> = {
   APPROVED: "Approved",
   EDITED: "Approved (edited)",
   REJECTED: "Rejected",
+  CONFIRMED: "Large qty confirmed",
   NO_ACTION: "—",
 };
 

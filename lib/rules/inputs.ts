@@ -15,7 +15,14 @@ export interface SourceData {
   inventory: { skuId: string; location: string; unitsOnHand: number; asOfDate: string }[];
   calendar: { yearMonth: string; isFestivalMonth: boolean }[];
   /** Purchase order lines; only open ones count (see isOpenPoStatus). Optional. */
-  openPurchaseOrders?: { skuId: string; orderedQty: number; receivedQty: number; status: string }[];
+  openPurchaseOrders?: {
+    skuId: string;
+    orderedQty: number;
+    receivedQty: number;
+    status: string;
+    poNumber?: string;
+    expectedDate?: string | null;
+  }[];
 }
 
 /** Statuses of a PO that has been sent to the supplier but not fully received. */
@@ -30,10 +37,14 @@ export function buildEngineInputs(data: SourceData) {
   const salesBySku = groupBy(data.sales, (s) => s.skuId);
   const inventoryBySku = groupBy(data.inventory, (r) => r.skuId);
   const onOrderBySku = new Map<string, number>();
+  const poLinesBySku = new Map<string, NonNullable<SkuInput["openPoLines"]>>();
   for (const po of data.openPurchaseOrders ?? []) {
     if (!isOpenPoStatus(po.status)) continue;
     const outstanding = Math.max(0, po.orderedQty - po.receivedQty);
     onOrderBySku.set(po.skuId, (onOrderBySku.get(po.skuId) ?? 0) + outstanding);
+    const lines = poLinesBySku.get(po.skuId) ?? [];
+    lines.push({ poNumber: po.poNumber ?? "PO", expectedDate: po.expectedDate ?? null, outstanding });
+    poLinesBySku.set(po.skuId, lines);
   }
 
   const skus: SkuInput[] = data.skus.map((s) => ({
@@ -48,6 +59,7 @@ export function buildEngineInputs(data: SourceData) {
       asOfDate,
     })),
     unitsOnOrder: onOrderBySku.get(s.skuId) ?? 0,
+    openPoLines: poLinesBySku.get(s.skuId) ?? [],
   }));
 
   return {

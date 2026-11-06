@@ -353,3 +353,54 @@ describe("buildEngineInputs: open purchase orders", () => {
     expect(buildEngineInputs(base).skus[0].unitsOnOrder).toBe(0);
   });
 });
+
+describe("late purchase orders", () => {
+  const sep = { asOf: "2026-09-15" };
+  const late = { poNumber: "PO-7", expectedDate: "2026-09-01", outstanding: 300 };
+
+  it("flags a PO expected before the stock date as an exception, keeping the recommendation and cover", () => {
+    const withLate = evaluateSku({ ...sku({ ...sep, onHand: 400 }), unitsOnOrder: 300, openPoLines: [late] }, ctx());
+    const without = evaluateSku({ ...sku({ ...sep, onHand: 400 }), unitsOnOrder: 300, openPoLines: [] }, ctx());
+    expect(withLate.latePurchaseOrders).toEqual([late]);
+    expect(withLate.rulesFired).toContain("LATE_PO");
+    expect(withLate.isException).toBe(true);
+    expect(withLate.flag).toBe("EXCEPTION");
+    expect(withLate.exceptionReasons.join(" ")).toMatch(/Late PO: PO-7 \(300 units\) was expected 2026-09-01/);
+    // Cover maths and the action don't change.
+    expect(withLate.weeksOfCover).toBe(without.weeksOfCover);
+    expect(withLate.action).toBe(without.action);
+    expect(withLate.quantity).toBe(without.quantity);
+  });
+
+  it("ignores POs due on or after the stock date, without a date, or fully received", () => {
+    const r = evaluateSku(
+      {
+        ...sku({ ...sep, onHand: 700 }),
+        openPoLines: [
+          { poNumber: "A", expectedDate: "2026-09-15", outstanding: 10 },
+          { poNumber: "B", expectedDate: "2026-10-01", outstanding: 10 },
+          { poNumber: "C", expectedDate: null, outstanding: 10 },
+          { poNumber: "D", expectedDate: "2026-09-01", outstanding: 0 },
+        ],
+      },
+      ctx(),
+    );
+    expect(r.latePurchaseOrders).toEqual([]);
+    expect(r.isException).toBe(false);
+  });
+
+  it("passes PO numbers and dates through buildEngineInputs", () => {
+    const { skus } = buildEngineInputs({
+      skus: [{ skuId: "A", perishability: "Low", standardReorderQty: 100, distributorId: "D1" }],
+      distributors: [{ distributorId: "D1", status: "Active" }],
+      sales: [{ skuId: "A", week: NOW, unitsSold: 10 }],
+      inventory: [{ skuId: "A", location: "WH", unitsOnHand: 50, asOfDate: "2026-10-19" }],
+      calendar: [],
+      openPurchaseOrders: [
+        { skuId: "A", orderedQty: 300, receivedQty: 100, status: "Open", poNumber: "PO-1", expectedDate: "2026-10-01" },
+        { skuId: "A", orderedQty: 50, receivedQty: 0, status: "Draft", poNumber: "PO-2", expectedDate: "2026-10-01" },
+      ],
+    });
+    expect(skus[0].openPoLines).toEqual([{ poNumber: "PO-1", expectedDate: "2026-10-01", outstanding: 200 }]);
+  });
+});

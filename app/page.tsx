@@ -6,6 +6,7 @@ import { StockHealth, type HealthRow } from "@/components/StockHealth";
 import { GenerateExplanationsForm, RecalculateForm } from "@/components/forms";
 import { AlertIcon, BoxIcon, ClockIcon, SparkIcon, TrendUpIcon, TruckIcon, UploadIcon } from "@/components/icons";
 import { geminiConfigured } from "@/lib/ai/gemini";
+import { capReachedMessage, getAiUsage } from "@/lib/ai/usage";
 import { getDb, schema, type Db } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { requirePage } from "@/lib/session";
@@ -117,6 +118,7 @@ export default async function Dashboard({
   const unitsToOrder = rows.reduce((a, r) => a + (r.rec.action === "REORDER" ? (r.rec.quantity ?? 0) : 0), 0);
   const festival = rows.some((r) => r.evaluation.festivalMonth);
   const t = run.thresholds as Thresholds;
+  const aiUsage = await getAiUsage(db);
   const upliftPct = Math.round((t.festivalUpliftPct ?? 0) * 100);
 
   // Chart data (all SKUs, not just the filtered view).
@@ -183,8 +185,18 @@ export default async function Dashboard({
         </div>
         {(canAi || canRecalc) && (
           <div className="toolbar">
-            {canAi && <GenerateExplanationsForm enabled={geminiConfigured()} />}
+            {canAi && (
+              <GenerateExplanationsForm
+                enabled={geminiConfigured()}
+                usage={{ ...aiUsage, message: capReachedMessage(aiUsage.cap, aiUsage.resumes) }}
+              />
+            )}
             {canRecalc && <RecalculateForm />}
+            {canAi && geminiConfigured() && (
+              <span className="ai-usage">
+                AI calls this month: {aiUsage.calls} of {aiUsage.cap}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -315,6 +327,12 @@ export default async function Dashboard({
                           </>
                         )}
                         {!sku && " · not in SKU master"}
+                        {(e.latePurchaseOrders?.length ?? 0) > 0 && (
+                          <>
+                            {" "}
+                            · <span className="tag late" title="An open PO was due before the stock date">Late PO</span>
+                          </>
+                        )}
                       </div>
                     </td>
                     <td className="num" data-label="On hand">

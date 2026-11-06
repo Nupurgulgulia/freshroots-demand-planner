@@ -6,7 +6,8 @@ import { explainRecommendation, explainRun } from "@/lib/ai/explain";
 import { geminiConfigured } from "@/lib/ai/gemini";
 import { DATASET_NAMES, datasetFromFileName, type DatasetName } from "@/lib/data/csv";
 import { importCsv, replaceOpenPurchaseOrders } from "@/lib/data/load";
-import { reviewRecommendation, type Decision } from "@/lib/review";
+import { capReachedMessage, getAiUsage } from "@/lib/ai/usage";
+import { confirmLargeQuantity, reviewRecommendation, type Decision } from "@/lib/review";
 import { getLatestRun, runEngine } from "@/lib/run-engine";
 import type { Thresholds } from "@/lib/rules/engine";
 import { requireAction } from "@/lib/session";
@@ -52,8 +53,17 @@ export async function generateExplanationsAction(_prev: ActionState, fd: FormDat
   const db = await getDb();
   const run = await getLatestRun(db);
   if (!run) return { ok: false, message: "No run yet." };
-  const { total, failed } = await explainRun(db, run.id, fd.get("force") === "1");
+  const before = await getAiUsage(db);
+  if (before.capReached) return { ok: false, message: capReachedMessage(before.cap, before.resumes) };
+  const { total, failed, skippedForCap } = await explainRun(db, run.id, fd.get("force") === "1");
   revalidateAll();
+  if (skippedForCap) {
+    const usage = await getAiUsage(db);
+    return {
+      ok: false,
+      message: `${total - failed - skippedForCap} of ${total} explained, then the monthly AI limit was reached. ${capReachedMessage(usage.cap, usage.resumes)}`,
+    };
+  }
   return failed
     ? { ok: false, message: `${total - failed} of ${total} explained; ${failed} failed (see SKU pages).` }
     : { ok: true, message: `${total} recommendations explained.` };
@@ -84,7 +94,27 @@ export async function reviewAction(_prev: ActionState, fd: FormData): Promise<Ac
   });
   if (!result.ok) return { ok: false, message: result.error };
   revalidateAll();
-  return { ok: true, message: `Saved: ${result.status.toLowerCase()}.` };
+  return {
+    ok: true,
+    message: result.needsConfirmation
+      ? `Saved: ${result.status.toLowerCase()}. This quantity is above the confirmation limit, so procurement must confirm it before it's sent.`
+      : `Saved: ${result.status.toLowerCase()}.`,
+  };
+}
+
+export async function confirmQuantityAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const { user, error } = await requireAction("confirmLargeQty");
+  if (!user) return { ok: false, message: error };
+  if (fd.get("checked") !== "1") return { ok: false, message: "Tick the box to confirm you've checked this quantity." };
+  const result = await confirmLargeQuantity(await getDb(), {
+    recommendationId: Number(fd.get("recommendationId")),
+    user: user.username,
+    userId: user.id,
+    note: str(fd, "note") || null,
+  });
+  if (!result.ok) return { ok: false, message: result.error };
+  revalidateAll();
+  return { ok: true, message: "Confirmed. This line is now ready to send." };
 }
 
 export async function saveThresholdsAction(_prev: ActionState, fd: FormData): Promise<ActionState> {

@@ -718,7 +718,8 @@ a.product-name:hover {
   color: var(--none-fg);
 }
 .status-APPROVED,
-.status-EDITED {
+.status-EDITED,
+.status-CONFIRMED {
   background: var(--ok-bg);
   color: var(--ok-fg);
 }
@@ -2107,4 +2108,90 @@ a:focus-visible {
 .login-hint strong {
   color: var(--accent);
   font-size: 12px;
+}
+
+/* ---------- Guardrails: quantity confirmation, late POs ---------- */
+
+.confirm-form {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  max-width: 340px;
+}
+
+.tag.late {
+  background: var(--stockout-bg);
+  color: var(--stockout-fg);
+}
+
+.hold-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--overstock-fg);
+}
+
+.ai-usage {
+  font-size: 12px;
+  color: var(--faint);
+}
+
+/* ---------- Other tables: never scroll sideways ---------- */
+
+/* Laptops: long values wrap instead of widening the table. */
+.stack-table td {
+  overflow-wrap: anywhere;
+}
+
+.stack-table th {
+  white-space: normal;
+}
+
+.confirm-form .note-input {
+  flex: 1 1 110px;
+}
+
+/* Phones: each row becomes a small card with labelled values (labels come from data-label). */
+@media (max-width: 640px) {
+  .stack-table,
+  .stack-table tbody {
+    display: block;
+  }
+
+  .stack-table thead {
+    display: none;
+  }
+
+  .stack-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 14px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .stack-table tr:last-child {
+    border-bottom: none;
+  }
+
+  .stack-table td {
+    display: block;
+    padding: 0;
+    border: none;
+    text-align: left !important;
+    white-space: normal;
+  }
+
+  .stack-table td:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .stack-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--faint);
+    margin-bottom: 2px;
+  }
 }

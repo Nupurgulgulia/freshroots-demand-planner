@@ -1,6 +1,6 @@
 import Papa from "papaparse";
 import { getDb } from "@/lib/db";
-import { getApprovedOrders } from "@/lib/review";
+import { getApprovedOrders, isReadyToSend } from "@/lib/review";
 import { getLatestRun } from "@/lib/run-engine";
 import { requireAction } from "@/lib/session";
 
@@ -11,7 +11,8 @@ export async function GET() {
   if (!user) return new Response(error, { status: 403 });
   const db = await getDb();
   const run = await getLatestRun(db);
-  const orders = run ? await getApprovedOrders(db, run.id) : [];
+  // Only lines that are ready to send: large quantities must be confirmed by procurement first.
+  const orders = (run ? await getApprovedOrders(db, run.id) : []).filter(isReadyToSend);
   const csv = Papa.unparse(
     orders.map((o) => ({
       Run_ID: run?.id,
@@ -27,6 +28,7 @@ export async function GET() {
       Approved_By: o.reviewedBy,
       Approved_At: o.reviewedAt ? new Date(o.reviewedAt).toISOString() : "",
       Note: o.reviewNote ?? "",
+      Confirmed_By: o.confirmedBy ?? "",
     })),
   );
   const name = `approved_orders_${run?.nowWeek ?? "none"}_run${run?.id ?? 0}.csv`;

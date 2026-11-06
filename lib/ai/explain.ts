@@ -6,6 +6,7 @@ import { schema } from "@/lib/db";
 import type { Evaluation, Thresholds } from "@/lib/rules/engine";
 import { buildFacts, hashFacts } from "./facts";
 import { explainWithGemini, geminiModel } from "./gemini";
+import { capReachedMessage, getAiUsage, reserveAiCall } from "./usage";
 
 /**
  * Explains one recommendation. Reuses the cached text unless `force` is set or
@@ -29,6 +30,12 @@ export async function explainRecommendation(db: Db, recommendationId: number, fo
   );
   const inputHash = hashFacts(facts, model);
   if (!force && row.ai && row.ai.inputHash === inputHash && !row.ai.error) return row.ai;
+
+  // Spend cap: every real Gemini call is counted; cached text above costs nothing.
+  if (!(await reserveAiCall(db))) {
+    const usage = await getAiUsage(db);
+    return { ...(row.ai ?? {}), capReached: true as const, error: capReachedMessage(usage.cap, usage.resumes) };
+  }
 
   let values: { reason: string | null; brief: string | null; error: string | null };
   try {
@@ -59,13 +66,18 @@ export async function explainRun(db: Db, runId: number, force = false) {
   const targets = recs.filter((r) => r.action !== "NONE").map((r) => r.id);
 
   let failed = 0;
+  let skippedForCap = 0;
   const queue = [...targets];
   const worker = async () => {
     for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
       const result = await explainRecommendation(db, id, force);
-      if (result.error) failed++;
+      if ("capReached" in result && result.capReached) {
+        // Stop asking once the monthly cap is hit; count what was left undone.
+        skippedForCap += 1 + queue.length;
+        queue.length = 0;
+      } else if (result.error) failed++;
     }
   };
   await Promise.all(Array.from({ length: 3 }, worker));
-  return { total: targets.length, failed };
+  return { total: targets.length, failed, skippedForCap };
 }

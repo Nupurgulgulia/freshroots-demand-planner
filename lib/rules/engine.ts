@@ -20,6 +20,11 @@ export interface Thresholds {
   highDemandMultiplier: number;
   /** Festival-month uplift on the demand baseline (0.25 = 25%). */
   festivalUpliftPct: number;
+  /**
+   * Not used by the rules: an approved quantity above this multiple of Standard_Reorder_Qty needs a
+   * procurement confirmation before it is ready to send.
+   */
+  maxQtyMultiple: number;
 }
 
 export const DEFAULT_THRESHOLDS: Thresholds = {
@@ -30,6 +35,7 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   highDemandPct: 0.2,
   highDemandMultiplier: 1.5,
   festivalUpliftPct: 0.25,
+  maxQtyMultiple: 3,
 };
 
 export type RuleId =
@@ -42,6 +48,7 @@ export type RuleId =
   | "SHORT_HISTORY"
   | "MISSING_DATA"
   | "INACTIVE_DISTRIBUTOR"
+  | "LATE_PO"
   | "NO_ACTION";
 
 export const RULE_LABELS: Record<RuleId, string> = {
@@ -54,6 +61,7 @@ export const RULE_LABELS: Record<RuleId, string> = {
   SHORT_HISTORY: "Fewer than 12 weeks of history",
   MISSING_DATA: "Missing data",
   INACTIVE_DISTRIBUTOR: "Distributor not active",
+  LATE_PO: "Purchase order is late",
   NO_ACTION: "No action",
 };
 
@@ -85,6 +93,8 @@ export interface SkuInput {
   inventory: { location: string; unitsOnHand: number; asOfDate: string }[];
   /** Units on open purchase orders not yet received (ordered minus received). */
   unitsOnOrder?: number;
+  /** The open PO lines behind unitsOnOrder, used to spot late deliveries. */
+  openPoLines?: { poNumber: string; expectedDate: string | null; outstanding: number }[];
 }
 
 export interface EngineContext {
@@ -103,6 +113,8 @@ export interface Evaluation {
   unitsOnOrder?: number;
   /** On hand + on order: the stock that weeks of cover is based on. */
   stockPosition?: number | null;
+  /** Open PO lines expected before the stock date and still not received. Still counted in cover. */
+  latePurchaseOrders?: { poNumber: string; expectedDate: string; outstanding: number }[];
   asOfDate: string | null;
   avg12: number | null;
   avg4: number | null;
@@ -203,6 +215,21 @@ export function evaluateSku(sku: SkuInput, ctx: EngineContext): Evaluation {
   }
   const demandRatio = avg12 && avg4 != null ? avg4 / avg12 : null;
 
+  // Late POs: expected before the stock date but not yet received. Flag for review; cover is unchanged.
+  const latePurchaseOrders = asOfDate
+    ? (sku.openPoLines ?? [])
+        .filter((l) => l.outstanding > 0 && l.expectedDate != null && l.expectedDate < asOfDate!)
+        .map((l) => ({ poNumber: l.poNumber, expectedDate: l.expectedDate!, outstanding: l.outstanding }))
+    : [];
+  if (latePurchaseOrders.length) {
+    rules.push("LATE_PO");
+    for (const l of latePurchaseOrders) {
+      reviewReasons.push(
+        `Late PO: ${l.poNumber} (${l.outstanding} units) was expected ${l.expectedDate}, before the stock date ${asOfDate}.`,
+      );
+    }
+  }
+
   if (sku.distributorStatus == null) {
     reviewReasons.push("Distributor is not in the distributor master.");
   } else if (sku.distributorStatus !== "Active") {
@@ -269,6 +296,7 @@ export function evaluateSku(sku: SkuInput, ctx: EngineContext): Evaluation {
     unitsOnHand,
     unitsOnOrder,
     stockPosition,
+    latePurchaseOrders,
     asOfDate,
     avg12,
     avg4,
@@ -294,12 +322,15 @@ export function evaluateSku(sku: SkuInput, ctx: EngineContext): Evaluation {
 }
 
 const fmt = (x: number) => (Math.round(x * 10) / 10).toString();
+/** Cover to 1 decimal, or 2 when 1 decimal would land exactly on a limit (2.98 must not read as 3). */
+const fmtCover = (x: number, limits: number[]) =>
+  limits.some((l) => Math.round(x * 10) / 10 === l && x !== l) ? (Math.round(x * 100) / 100).toString() : fmt(x);
 
 /** Template one-line reason, used until (or instead of) a Gemini explanation. */
 function describe(e: Omit<Evaluation, "reason">, t: Thresholds): string {
   if (e.action === "REVIEW") return `Needs review: ${e.exceptionReasons[0]}`;
   const onOrder = e.unitsOnOrder ? ` (incl. ${e.unitsOnOrder} on order)` : "";
-  const cover = `${fmt(e.weeksOfCover!)} weeks of cover${onOrder}`;
+  const cover = `${fmtCover(e.weeksOfCover!, [e.stockoutThresholdWeeks, e.overstockThresholdWeeks])} weeks of cover${onOrder}`;
   const trend = `last-4-week demand ${fmt(e.avg4!)}/wk vs 12-week ${fmt(e.avg12!)}/wk`;
   let text: string;
   if (e.stockoutRisk && e.highDemand) {

@@ -21,6 +21,7 @@ export const THRESHOLD_DEFS: ThresholdDef[] = [
   { key: "highDemandPct", label: "High demand when 4-week avg exceeds 12-week avg by", unit: "percent" },
   { key: "highDemandMultiplier", label: "High-demand reorder (× standard quantity)", unit: "multiplier" },
   { key: "festivalUpliftPct", label: "Festival-month demand uplift", unit: "percent" },
+  { key: "maxQtyMultiple", label: "Procurement must confirm quantities above (× standard)", unit: "multiplier" },
 ];
 
 /** Engine value -> value shown in the UI (0.2 -> 20). */
@@ -66,5 +67,6 @@ export function validateThresholds(t: Thresholds): string[] {
     errors.push("High perishability: stockout weeks must be below overstock weeks.");
   }
   if (t.highDemandMultiplier <= 0) errors.push("High-demand reorder multiple must be above 0.");
+  if (t.maxQtyMultiple < 1) errors.push("The confirmation limit must be at least 1× the standard quantity.");
   return errors;
 }
