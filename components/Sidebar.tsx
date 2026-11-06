@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/login/actions";
 import {
   DashboardIcon,
+  HistoryIcon,
   LeafIcon,
   LinkIcon,
   LogoutIcon,
@@ -21,6 +22,7 @@ const NAV = [
   { href: "/review", label: "Review", Icon: ReviewIcon },
   { href: "/approved", label: "Approved orders", Icon: TruckIcon },
   { href: "/performance", label: "Performance", Icon: TrendUpIcon },
+  { href: "/runs", label: "Run history", Icon: HistoryIcon },
   { href: "/upload", label: "Upload data", Icon: UploadIcon },
   { href: "/settings", label: "Settings", Icon: SettingsIcon },
   { href: "/zoho", label: "Zoho mapping", Icon: LinkIcon, zohoOnly: true },

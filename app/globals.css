@@ -1037,6 +1037,22 @@ a:focus-visible {
   align-items: center;
 }
 
+/* Run history: the two run pickers share the row and stack on phones. */
+.compare-form {
+  align-items: flex-end;
+}
+
+.compare-pick {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.compare-pick select {
+  width: 100%;
+}
+
 .check {
   display: inline-flex;
   gap: 6px;

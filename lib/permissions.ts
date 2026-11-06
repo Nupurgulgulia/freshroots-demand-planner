@@ -14,6 +14,7 @@ export const isRole = (x: unknown): x is Role => typeof x === "string" && (ROLES
 export type Permission =
   | "viewDashboard"
   | "viewPerformance"
+  | "viewRuns" // run history and comparison (Phase 6)
   | "viewSku"
   | "viewReview"
   | "review" // approve / edit / reject
@@ -33,6 +34,7 @@ const MATRIX: Record<Role, Permission[]> = {
   planner: [
     "viewDashboard",
     "viewPerformance",
+    "viewRuns",
     "viewSku",
     "viewReview",
     "review",
@@ -48,6 +50,7 @@ const MATRIX: Record<Role, Permission[]> = {
   procurement: [
     "viewDashboard",
     "viewPerformance",
+    "viewRuns",
     "viewSku",
     "viewReview",
     "viewApproved",
@@ -72,6 +75,7 @@ const PAGE_RULES: [prefix: string, permission: Permission][] = [
   ["/upload", "upload"],
   ["/settings", "viewSettings"],
   ["/performance", "viewPerformance"],
+  ["/runs", "viewRuns"],
   ["/zoho", "manageZohoMapping"],
 ];
 

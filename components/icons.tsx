@@ -168,3 +168,10 @@ export const LinkIcon = (p: IconProps) => (
     <path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" />
   </Svg>
 );
+
+export const HistoryIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8" />
+    <path d="M3 3v5h5M12 7v5l3 2" />
+  </Svg>
+);
